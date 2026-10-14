@@ -1,0 +1,14 @@
+{
+  "id": "script-example",
+  "name": "Script Example",
+  "description": "Custom JavaScript extractor, for pages the css and json types cannot handle. Matches tests/fixtures/cards-example.html.",
+  "homeUrl": "https://www.example.net/",
+  "selectors": {
+    "ready": ".listing-card"
+  },
+  "extract": {
+    "type": "script",
+    "file": "./script-example.extract.js",
+    "options": { "card": ".listing-card" }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "rental-listings-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Configurable rental listings scraper: describe any portal in JSON, get notified about new listings",
+  "license": "Unlicense",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "watch": "node src/index.js --watch",
+    "setup": "node src/tools/setup.js",
+    "check-site": "node src/tools/check-site.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.49.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.0"
+  }
+}

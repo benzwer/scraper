@@ -1,0 +1,19 @@
+{
+  "searches": [
+    {
+      "site": "cards-example",
+      "url": "https://www.example.com/rent?city=springfield&sort=newest"
+    },
+    {
+      "site": "embedded-json-example",
+      "url": "https://www.example.org/search/rent/springfield",
+      "enabled": false
+    }
+  ],
+  "filters": {
+    "maxPrice": 1300,
+    "minSurface": null,
+    "minRooms": 2,
+    "maxRooms": null
+  }
+}

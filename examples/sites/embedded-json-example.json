@@ -1,0 +1,21 @@
+{
+  "id": "embedded-json-example",
+  "name": "Embedded JSON Example",
+  "description": "A portal that embeds its results as JSON in a <script> tag. Matches tests/fixtures/embedded-json-example.html.",
+  "homeUrl": "https://www.example.org/",
+  "reloadIfStale": true,
+  "extract": {
+    "type": "json",
+    "script": "script#search-data",
+    "items": "page.sections[*].listings",
+    "fields": {
+      "id": "id",
+      "url": { "path": "slug", "template": "https://www.example.org/listing/{}" },
+      "title": "name",
+      "price": ["price.amount", "price.label"],
+      "surface": "details.area",
+      "rooms": "details.rooms",
+      "city": "address.city"
+    }
+  }
+}

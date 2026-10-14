@@ -1,0 +1,23 @@
+{
+  "id": "cards-example",
+  "name": "Cards Example",
+  "description": "A portal whose results are HTML cards. Matches tests/fixtures/cards-example.html.",
+  "homeUrl": "https://www.example.com/",
+  "selectors": {
+    "cookie": "#accept-cookies",
+    "next": ["a.pagination__next"]
+  },
+  "extract": {
+    "type": "css",
+    "item": ".listing-card",
+    "fields": {
+      "id": { "attr": "data-id" },
+      "url": { "selector": "a.listing-card__link", "attr": "href" },
+      "title": ".listing-card__title",
+      "price": ".listing-card__price",
+      "surface": { "selector": ".listing-card__features", "match": "(\\d+(?:[.,]\\d+)?)\\s*m²" },
+      "rooms": { "selector": ".listing-card__features", "match": "(\\d+)\\+?\\s*rooms?" },
+      "city": ".listing-card__city"
+    }
+  }
+}

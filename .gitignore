@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -147,3 +148,12 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+=======
+node_modules/
+browser-profile/
+data/
+.env
+src/sites/private/
+tests/private/
+user/
+>>>>>>> a4a7f2c (Configurable rental listings scraper)
