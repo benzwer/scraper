@@ -19,6 +19,7 @@ test('a minimal css definition gets sensible defaults', () => {
   assert.equal(definition.selectors.items, '.card');
   assert.equal(definition.selectors.cookie, null);
   assert.deepEqual(definition.selectors.next, []);
+  assert.deepEqual(definition.selectors.popups, []);
   assert.equal(definition.reloadIfStale, false);
   assert.deepEqual(definition.extract.fields.url, { selector: 'a', attr: 'href' });
 });

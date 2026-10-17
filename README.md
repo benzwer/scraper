@@ -198,6 +198,7 @@ CSS plus extras such as `:has-text("Next")` and `:text-is("Next")`.
 | `cookie` | none | The cookie banner's *accept* button |
 | `next` | `[]` | Extra selectors for the *next page* button. Common ones (`rel="next"`, "Next", "Successiva", `›`, …) are already tried |
 | `blocked` | `[]` | Extra selectors of the portal's own "access denied" page. Common captchas are already recognised |
+| `popups` | `[]` | Extra selectors for the *close* button of a "save this search" popup. Popups marked as dialogs that mention saving the search or alerts are already closed (never saved) by their "Close", "×", "No thanks", "Non ora", … button |
 
 ### Fields
 

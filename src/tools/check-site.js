@@ -66,9 +66,11 @@ async function main() {
     const readyCount = await page.locator(ready).count();
     const nextFound = (await site.nextLocator(page).count()) > 0;
     const cookieCount = cookie ? await page.locator(cookie).count() : null;
+    const popupFound = (await site.popupCloseLocator(page).count()) > 0;
 
     console.log(`Ready:     ${ready} -> ${readyCount ? `found (${readyCount})` : 'NOT FOUND'}`);
     console.log(`Next page: ${nextFound ? 'found' : 'not found (fine if the page has no pagination)'}`);
+    if (popupFound) console.log('Popup:     "save search" popup close button found');
     if (cookie) console.log(`Cookie:    ${cookie} -> ${cookieCount ? 'found' : 'not found (often missing in saved pages)'}`);
 
     const blockReason = await site.detectBlock(page);

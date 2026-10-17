@@ -22,6 +22,13 @@ const DEFAULT_NEXT_CSS = [
 
 const NEXT_NAME_RE = /^(pagina )?(successiva|avanti|next)$|^[›»→]$/i;
 
+// "Save this search / get alerts" popups are closed without saving (saving usually needs an
+// account). Only close buttons inside a dialog about saving the search are considered, so a
+// permanent "Save search" button in the results toolbar is never touched.
+const SAVE_SEARCH_TEXT_RE = /salva.{0,30}ricerc|ricerc.{0,30}salvat|save.{0,30}search|avvis|alert/i;
+const CLOSE_NAME_RE =
+  /^(chiudi|close)\b|^(annulla|cancel|no,? grazie|no,? thanks|non ora|not now|più tardi|later|x|×|✕|✖)$/i;
+
 // One portal + one search. Everything portal-specific comes from the site definition
 // (a validated JSON file, see definitions.js); the flow itself is the same for every portal.
 class Site {
@@ -95,6 +102,13 @@ class Site {
         });
       }
 
+      // Same for a "save this search" popup: the mouse moves to its close button and clicks it.
+      await page.addLocatorHandler(this.popupCloseLocator(page), async button => {
+        this.log.info('Closing a "save search" popup...');
+        await delay(700, 1800);
+        await human.click(button);
+      });
+
       // Start from the home page like a person would, then go to the search.
       if (homeUrl) {
         const homeResponse = await page.goto(homeUrl, {
@@ -127,6 +141,7 @@ class Site {
 
         await delay(1200, 3000);
         await this.acceptCookies(page, human);
+        await this.closeSaveSearchPopup(page, human);
         await human.readingScroll();
 
         let pageData = this.normalizeAll(await this.extractRaw(page));
@@ -200,6 +215,30 @@ class Site {
       await human.click(button).catch(() => {});
       await delay(600, 1500);
     }
+  }
+
+  // The close button of a "save this search" popup, found by role and visible name, plus the
+  // site's own selectors.popups for popups that are not marked as dialogs.
+  popupCloseLocator(page) {
+    let close = page
+      .getByRole('dialog')
+      .filter({ hasText: SAVE_SEARCH_TEXT_RE })
+      .getByRole('button', { name: CLOSE_NAME_RE });
+
+    if (this.selectors.popups.length) close = close.or(page.locator(this.selectors.popups.join(', ')));
+    return close.first();
+  }
+
+  // The locator handler only fires before Playwright actions (e.g. clicking "next"): this closes
+  // the popup as soon as the results are on screen, before scrolling through them.
+  async closeSaveSearchPopup(page, human) {
+    const close = this.popupCloseLocator(page);
+    if (!(await close.isVisible().catch(() => false))) return;
+
+    this.log.info('Closing a "save search" popup...');
+    await delay(800, 2000);
+    await human.click(close).catch(() => {});
+    await delay(600, 1500);
   }
 
   nextLocator(page) {
