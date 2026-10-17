@@ -8,6 +8,9 @@ const { passesFilters, formatListing } = require('../models/listing');
 
 chromium.use(StealthPlugin());
 
+const formatTime = iso =>
+  new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+
 // Orchestrator: opens the browser, goes through the sites one at a time, saves and notifies.
 class Scraper {
   constructor({ config, sites, store, notifier }) {
@@ -18,8 +21,46 @@ class Scraper {
     this.log = createLogger('Scraper');
   }
 
-  async runOnce({ interactive = false } = {}) {
+  // Sites that can be visited now: the ones paused after a block are skipped.
+  sitesToVisit({ retryBlocked = false } = {}) {
+    return this.sites.filter(site => {
+      const block = this.store.activeBlock(site.name);
+      if (!block) return true;
+
+      if (retryBlocked) {
+        this.log.info(`${site.name}: paused after a block, retrying as requested.`);
+        return true;
+      }
+      this.log.info(
+        `${site.name}: skipped, paused until ${formatTime(block.until)} after a block ` +
+        `(${block.reason}). Use --retry-blocked to try now.`
+      );
+      return false;
+    });
+  }
+
+  // The site refused access: pause it and tell the user, instead of insisting.
+  async handleBlock(siteName, reason) {
+    const block = this.store.recordBlock(siteName, reason, this.config.blocking);
+    const hours = Math.round((Date.parse(block.until) - Date.parse(block.since)) / 3600000);
+
+    this.log.warn(`${siteName}: blocked (${reason}). Paused for ${hours} h, until ${formatTime(block.until)}.`);
+    await this.notifier.send({
+      title: `${siteName}: access blocked`,
+      message:
+        `${reason}. The site will not be visited for ${hours} h (until ${formatTime(block.until)}). ` +
+        'Screenshot in data/debug/.'
+    });
+  }
+
+  async runOnce({ interactive = false, retryBlocked = false } = {}) {
     const { config, store } = this;
+
+    const sites = this.sitesToVisit({ retryBlocked });
+    if (sites.length === 0) {
+      this.log.info('No site to visit in this run.');
+      return { listings: [] };
+    }
 
     const context = await chromium.launchPersistentContext(config.paths.profileDir, {
       headless: config.browser.headless,
@@ -32,7 +73,7 @@ class Scraper {
     const allListings = [];
 
     try {
-      const order = shuffle(this.sites);
+      const order = shuffle(sites);
 
       for (let i = 0; i < order.length; i++) {
         const site = order[i];
@@ -41,7 +82,7 @@ class Scraper {
 
         this.log.info(`${site.name}: ${maxPages} page(s)${firstRun ? ' (first run)' : ''}`);
 
-        const { listings } = await site.scrape(context, maxPages);
+        const { listings, blocked } = await site.scrape(context, maxPages);
         allListings.push(...listings);
 
         const { added, duplicates } = store.registerMany(listings);
@@ -53,6 +94,10 @@ class Scraper {
         // The cross-portal match is only a heuristic, so duplicates are still notified (labelled)
         // rather than risk silently dropping a different flat with the same numbers.
         await this.notifyNew(site.name, [...added, ...duplicates], firstRun);
+
+        if (blocked) await this.handleBlock(site.name, blocked.reason);
+        else store.clearBlock(site.name);
+
         await store.save();
 
         if (i < order.length - 1) {

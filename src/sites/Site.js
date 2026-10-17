@@ -6,6 +6,7 @@ const { delay } = require('../utils/random');
 const { createLogger } = require('../utils/logger');
 const { normalizeListing } = require('../models/listing');
 const { extractListings } = require('./extract');
+const { blockedStatus, findBlockSignal } = require('./blocking');
 
 // Common "next page" controls, in English and Italian. A site definition can add its own
 // through selectors.next.
@@ -41,6 +42,15 @@ class Site {
     return page.evaluate(extractListings, extract);
   }
 
+  // Returns why the page is a block page (captcha, bot check, ...) or null.
+  // Only called when the listings are missing, so a captcha in an unrelated widget is ignored.
+  async detectBlock(page) {
+    for (const selector of this.selectors.blocked) {
+      if (await page.locator(selector).count().catch(() => 0)) return `block page (${selector})`;
+    }
+    return page.evaluate(findBlockSignal).catch(() => null);
+  }
+
   async waitReady(page) {
     if (!this.selectors.ready) throw new Error('selectors.ready is missing');
     await page.locator(this.selectors.ready).first().waitFor({
@@ -60,6 +70,15 @@ class Site {
 
     const results = [];
     const seen = new Set();
+    let blocked = null;
+
+    const stopIfBlocked = async reason => {
+      if (!reason) return false;
+      this.log.warn(`Access blocked (${reason}): stopping and saving debug files.`);
+      await this.saveDebug(page, 'blocked');
+      blocked = { reason };
+      return true;
+    };
 
     // Reuse the initial blank tab if it is still there.
     const page =
@@ -78,26 +97,29 @@ class Site {
 
       // Start from the home page like a person would, then go to the search.
       if (homeUrl) {
-        await page.goto(homeUrl, {
+        const homeResponse = await page.goto(homeUrl, {
           waitUntil: 'domcontentloaded',
           timeout: timing.navigationTimeout
         });
+        if (await stopIfBlocked(blockedStatus(homeResponse))) return { listings: results, blocked };
         await delay(2500, 5000);
         await this.acceptCookies(page, human);
         await human.idleJitter();
         await delay(1500, 3500);
       }
 
-      await page.goto(url, {
+      const searchResponse = await page.goto(url, {
         waitUntil: 'domcontentloaded',
         timeout: timing.navigationTimeout,
         referer: homeUrl || undefined
       });
+      if (await stopIfBlocked(blockedStatus(searchResponse))) return { listings: results, blocked };
 
       for (let p = 1; p <= maxPages; p++) {
         this.log.info(`Page ${p}: ${page.url()}`);
 
         if (!(await this.waitForListings(page))) {
+          if (await stopIfBlocked(await this.detectBlock(page))) break;
           this.log.warn('Listings not found on the page: saving debug files.');
           await this.saveDebug(page, 'no-listings');
           break;
@@ -110,6 +132,7 @@ class Site {
         let pageData = this.normalizeAll(await this.extractRaw(page));
 
         if (pageData.length === 0) {
+          if (await stopIfBlocked(await this.detectBlock(page))) break;
           this.log.warn('No listings extracted: saving debug files.');
           await this.saveDebug(page, 'no-extract');
           break;
@@ -147,8 +170,8 @@ class Site {
       this.log.error(error.message);
     }
 
-    // The tab stays open.
-    return { listings: results };
+    // The tab stays open. "blocked" is { reason } when the site refused access, otherwise null.
+    return { listings: results, blocked };
   }
 
   // Waits for the listings to appear on the page. Returns true/false.

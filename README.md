@@ -7,6 +7,8 @@ sends a notification to your phone (ntfy or Telegram) **only for the new ones**.
   listings, where the price is, …). A JavaScript escape hatch covers the odd cases.
 - **Gentle browsing:** a real Chromium window, human-like mouse movements and scrolling,
   random pauses, low frequency, active hours only.
+- **Takes no for an answer:** when a portal shows a captcha or denies access, the scraper does
+  not insist. It pauses that portal for hours and tells you.
 - **Useful notifications:** filters on price, surface and rooms; a digest instead of a flood;
   listings that look like the same flat on another portal are labelled as possible duplicates.
 - **Your data stays yours:** your searches and site definitions live in `user/`, which is
@@ -27,6 +29,8 @@ sends a notification to your phone (ntfy or Telegram) **only for the new ones**.
 - [Site definitions: `user/sites/*.json`](#site-definitions-usersitesjson)
 - [Writing a definition, step by step](#writing-a-definition-step-by-step)
 - [When a site stops working](#when-a-site-stops-working)
+- [When a portal blocks you](#when-a-portal-blocks-you)
+- [Running on a server or VM](#running-on-a-server-or-vm)
 - [Commands](#commands)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
@@ -36,7 +40,8 @@ sends a notification to your phone (ntfy or Telegram) **only for the new ones**.
 
 - Node.js 18 or later
 - A desktop session: the browser runs in a visible window (portals block headless browsers
-  much more often)
+  much more often). On a server without a desktop, see
+  [Running on a server or VM](#running-on-a-server-or-vm)
 
 ## Quick start
 
@@ -89,6 +94,9 @@ For every enabled search, in random order and with a pause between portals:
 **Cleanup:** listings not seen for 90 days are removed from `data/seen.json`
 (`store.retentionDays`).
 
+**Blocks:** if a portal refuses access, the scraper stops visiting it for a while and notifies
+you. See [When a portal blocks you](#when-a-portal-blocks-you).
+
 ## Configuration: `user/config.json`
 
 ```json
@@ -128,6 +136,7 @@ typos.
 | `watch.intervalMinutes` | `[30, 60]` | Random interval between runs in `npm run watch` |
 | `watch.activeHours` | `[7, 22]` | Runs only between these hours |
 | `store.retentionDays` | `90` | Forget listings not seen for this many days. `null` = never |
+| `blocking.pauseHours` / `blocking.maxPauseHours` | `6` / `48` | Pause after a portal blocks access; it doubles at each consecutive block, up to the maximum |
 | `browser.locale` / `browser.timezoneId` | `"it-IT"` / `"Europe/Rome"` | Set them to the country of your portals |
 | `timing.*` | see file | Pauses and timeouts, in milliseconds |
 
@@ -185,6 +194,7 @@ CSS plus extras such as `:has-text("Next")` and `:text-is("Next")`.
 | `items` | `extract.item` (css) | A listing, hovered now and then to look human |
 | `cookie` | none | The cookie banner's *accept* button |
 | `next` | `[]` | Extra selectors for the *next page* button. Common ones (`rel="next"`, "Next", "Successiva", `›`, …) are already tried |
+| `blocked` | `[]` | Extra selectors of the portal's own "access denied" page. Common captchas are already recognised |
 
 ### Fields
 
@@ -234,8 +244,11 @@ Every field can also have:
 | `attr` | Read this attribute instead of the text. Relative `href`/`src` become absolute URLs |
 | `match`, `template` | See [Fields](#fields) |
 
-To pick a value out of a block of text (e.g. a features list with surface and rooms), point
-`selector` at the block and use `match`.
+Prefer a selector that points at exactly one value. Attributes that describe the content are
+often the most stable choice, e.g. `"[aria-label^=\"Surface\"]"`. Use `match` on a larger block
+only when there is no better element. Watch out: the text of adjacent elements is joined
+**without spaces**, so `<span>€ 1.700</span><span>118 m²</span>` reads as `€ 1.700118 m²`.
+`check-site` shows these mistakes immediately as absurd prices or surfaces.
 
 ### `extract.type: "json"`
 
@@ -304,12 +317,106 @@ use `require` or variables defined outside the function. See
 
 Portals change their pages. When the listings do not appear or nothing is extracted, the
 scraper logs a warning and saves a screenshot and the HTML in `data/debug/`
-(`<Portal name>_no-listings.*` or `<Portal name>_no-extract.*`).
+(`<Portal name>_no-listings.*` or `<Portal name>_no-extract.*`). Run `check-site` on the saved
+HTML, fix the selectors, and check again.
 
-- **Screenshot shows a captcha or "access denied"**: the portal is blocking you. Wait, and
-  reduce the frequency (`watch.intervalMinutes`).
-- **Screenshot shows the listings**: the page structure changed. Run `check-site` on the saved
-  HTML, fix the selectors, and check again.
+## When a portal blocks you
+
+Many portals use bot protection (DataDome, Cloudflare, PerimeterX, …) and may answer with a
+captcha or an "access denied" page instead of the results. The scraper treats that as a clear
+**no**: it does not try to solve or get around the check.
+
+What happens:
+
+1. the block is recognised from the HTTP status (`403`, `429`) or from the page: common
+   captchas are built in, and `selectors.blocked` adds the portal's own block page;
+2. the scraper stops visiting that portal, saves `data/debug/<Portal name>_blocked.*` and sends
+   you a notification, e.g. *"My Portal: access blocked. DataDome captcha. The site will not be
+   visited for 6 h"*;
+3. the portal is skipped until the pause ends. Each consecutive block doubles the pause (6, 12,
+   24, 48 hours by default, see `blocking` in the settings), and a successful visit resets it.
+   The other portals keep running normally.
+
+To try a paused portal before the pause ends, run `npm start -- --retry-blocked`.
+
+`check-site` also recognises block pages: if you run it on one, it says so instead of reporting
+empty fields.
+
+If a portal keeps blocking you, it does not want automated visits: remove its search (or set
+`"enabled": false`) and check it by hand, or look for an official alternative such as its
+saved-search alerts.
+
+## Running on a server or VM
+
+The scraper can run unattended on a machine without a desktop (a VM on Proxmox, a home server,
+…). The browser still needs a screen: instead of switching to headless mode, which portals
+block more often, give it a **virtual screen** with Xvfb. The instructions below are for
+Debian/Ubuntu.
+
+### 1. Install
+
+```bash
+sudo apt install xvfb
+npm install
+npx playwright install --with-deps chromium   # also installs Chromium's system libraries
+npm run setup                                  # then edit user/ and .env as usual
+```
+
+Set the VM's time zone, because `watch.activeHours` follows the machine's clock:
+
+```bash
+sudo timedatectl set-timezone Europe/Rome      # your time zone
+```
+
+Try it once in the foreground (Ctrl+C to stop):
+
+```bash
+xvfb-run -a -s "-screen 0 1920x1080x24" node src/index.js --watch
+```
+
+### 2. Run it as a service
+
+A systemd service starts the scraper at boot, restarts it after a crash and keeps it running
+after you log out. Create `/etc/systemd/system/rental-scraper.service`, adapting `User`,
+`WorkingDirectory` and the path to `node` (`which node`):
+
+```ini
+[Unit]
+Description=Rental listings scraper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=scraper
+WorkingDirectory=/home/scraper/rental-scraper
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1920x1080x24" /usr/bin/node src/index.js --watch
+# The scraper saves and exits on SIGINT (like Ctrl+C), not on systemd's default SIGTERM
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now rental-scraper     # start now and at every boot
+journalctl -u rental-scraper -f                # follow the logs
+sudo systemctl stop rental-scraper             # stop it
+```
+
+### Notes
+
+- Always use **watch mode** (`--watch`): `npm start` waits for ENTER at the end of the run.
+- Give the VM at least **2 GB of RAM** (4 GB is safer): Chromium is the heavy part.
+- **IP address:** from a home server you browse with your home connection. Servers in a data
+  centre or a cloud provider are blocked by portals much more often.
+- **Debug files** (`data/debug/`) are saved as usual: copy the screenshots to your computer to
+  see what the browser saw.
+- **Headless mode** is a last resort, if Xvfb is not an option: add
+  `"browser": { "headless": true }` to `user/config.json` and run `node src/index.js --watch`
+  without `xvfb-run`.
 
 ## Commands
 
@@ -317,6 +424,7 @@ scraper logs a warning and saves a screenshot and the HTML in `data/debug/`
 |---------|--------------|
 | `npm run setup` | Creates `user/` and `.env` from the examples (never overwrites) |
 | `npm start` | One run; the browser stays open until you press ENTER |
+| `npm start -- --retry-blocked` | One run that also visits the portals paused after a block |
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
 | `npm run check-site -- <id or file> <page.html>` | Tests a site definition offline |
 | `npm test` | Unit tests, no network |
@@ -332,6 +440,7 @@ src/core/Scraper.js         orchestrator: portal order, pauses, saving, notifica
 src/core/ResultStore.js     listings already seen, cross-portal duplicates, cleanup
 src/sites/definitions.js    loads and validates the site definitions
 src/sites/extract.js        generic css/json extractor (runs in the page)
+src/sites/blocking.js       recognises captchas and "access denied" pages
 src/sites/Site.js           flow for one portal: home -> search -> cookies -> pages
 src/sites/index.js          pairs the searches with their definitions
 src/human/HumanBehavior.js  mouse, wheel, clicks and pauses

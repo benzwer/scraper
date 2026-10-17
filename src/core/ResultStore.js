@@ -3,14 +3,17 @@ const path = require('node:path');
 
 const { listingKey, crossKey } = require('../models/listing');
 
-// On-disk memory: listings already seen (to report only new ones) and cross-portal duplicates.
+const HOUR_MS = 60 * 60 * 1000;
+
+// On-disk memory: listings already seen (to report only new ones), cross-portal duplicates,
+// and the sites paused after blocking access.
 class ResultStore {
   // retentionDays: listings not seen for longer than this are dropped on save (null = keep forever).
   constructor(dataDir, { retentionDays = null } = {}) {
     this.dir = dataDir;
     this.retentionDays = retentionDays;
     this.file = path.join(dataDir, 'seen.json');
-    this.data = { listings: {}, cross: {} };
+    this.data = { listings: {}, cross: {}, blocks: {} };
   }
 
   async load() {
@@ -20,7 +23,8 @@ class ResultStore {
       const parsed = JSON.parse(await fs.readFile(this.file, 'utf8'));
       this.data = {
         listings: parsed.listings || {},
-        cross: parsed.cross || {}
+        cross: parsed.cross || {},
+        blocks: parsed.blocks || {}
       };
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
@@ -29,6 +33,32 @@ class ResultStore {
 
   hasSource(source) {
     return Object.values(this.data.listings).some(item => item.source === source);
+  }
+
+  // The active block of a site ({ reason, since, until, count }), or null when it can be visited.
+  activeBlock(source, now = Date.now()) {
+    const block = this.data.blocks[source];
+    return block && Date.parse(block.until) > now ? block : null;
+  }
+
+  // Pauses a site after a block. Each consecutive block doubles the pause, up to maxPauseHours.
+  recordBlock(source, reason, { pauseHours, maxPauseHours }, now = Date.now()) {
+    const count = (this.data.blocks[source]?.count || 0) + 1;
+    const hours = Math.min(pauseHours * 2 ** (count - 1), maxPauseHours);
+
+    const block = {
+      reason,
+      since: new Date(now).toISOString(),
+      until: new Date(now + hours * HOUR_MS).toISOString(),
+      count
+    };
+    this.data.blocks[source] = block;
+    return block;
+  }
+
+  // A visit went through: the next block starts again from the shortest pause.
+  clearBlock(source) {
+    delete this.data.blocks[source];
   }
 
   // Registers the listings and returns only the ones that are really new.

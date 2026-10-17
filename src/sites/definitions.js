@@ -9,7 +9,7 @@ const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 const ALLOWED = {
   root: ['id', 'name', 'description', 'homeUrl', 'reloadIfStale', 'selectors', 'extract'],
-  selectors: ['ready', 'items', 'cookie', 'next'],
+  selectors: ['ready', 'items', 'cookie', 'next', 'blocked'],
   css: ['type', 'item', 'fields'],
   json: ['type', 'script', 'items', 'fields'],
   script: ['type', 'file', 'options'],
@@ -143,6 +143,8 @@ function normalizeSelectors(selectors = {}, extract, errors) {
 
   const next = [].concat(selectors.next ?? []);
   if (!next.every(isText)) errors.push('selectors.next: must be a string or an array of strings');
+  const blocked = [].concat(selectors.blocked ?? []);
+  if (!blocked.every(isText)) errors.push('selectors.blocked: must be a string or an array of strings');
 
   // Sensible defaults: the listing card (css) or the JSON script (json) means "the page is ready".
   const ready = selectors.ready ?? (extract?.type === 'css' ? extract.item : extract?.script) ?? null;
@@ -152,7 +154,8 @@ function normalizeSelectors(selectors = {}, extract, errors) {
     ready,
     items: selectors.items ?? (extract?.type === 'css' ? extract.item : null),
     cookie: selectors.cookie ?? null,
-    next
+    next,
+    blocked
   };
 }
 

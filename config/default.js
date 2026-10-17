@@ -47,6 +47,10 @@ module.exports = {
     digestSize: 10
   },
 
+  // When a site answers with a captcha or denies access, it is not visited again for
+  // pauseHours. Each consecutive block doubles the pause, up to maxPauseHours.
+  blocking: { pauseHours: 6, maxPauseHours: 48 },
+
   // Listings not seen for this many days are removed from data/seen.json (null = keep forever).
   store: { retentionDays: 90 },
 

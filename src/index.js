@@ -14,6 +14,7 @@ const { createLogger } = require('./utils/logger');
 async function main() {
   const log = createLogger('main');
   const watch = process.argv.includes('--watch');
+  const retryBlocked = process.argv.includes('--retry-blocked');
 
   const { config, searches } = loadConfig(defaults);
   const definitions = loadSiteDefinitions(path.join(config.paths.userDir, 'sites'));
@@ -39,7 +40,7 @@ async function main() {
   if (watch) {
     await scraper.watch();
   } else {
-    await scraper.runOnce({ interactive: true });
+    await scraper.runOnce({ interactive: true, retryBlocked });
   }
 }
 

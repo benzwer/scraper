@@ -71,6 +71,14 @@ async function main() {
     console.log(`Next page: ${nextFound ? 'found' : 'not found (fine if the page has no pagination)'}`);
     if (cookie) console.log(`Cookie:    ${cookie} -> ${cookieCount ? 'found' : 'not found (often missing in saved pages)'}`);
 
+    const blockReason = await site.detectBlock(page);
+    if (blockReason) {
+      console.log(`\nBlocked:   ${blockReason}. This is the page the site shows to refuse access,`);
+      console.log('           not the search results: the selectors cannot be checked on it.');
+      process.exitCode = 1;
+      return;
+    }
+
     const raw = (await site.extractRaw(page)) || [];
     const listings = site.normalizeAll(raw);
 
