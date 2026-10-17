@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 module.exports = {
   paths: {
     root,
-    profileDir: path.join(root, 'browser-profile'), // persistent profile (cookies, history)
+    profileDir: path.join(root, 'browser-profile'), // one persistent profile per site (cookies, history)
     dataDir: path.join(root, 'data'),                // seen listings, latest run, debug files
     userDir: path.join(root, 'user')                 // your config.json and site definitions
   },

@@ -67,7 +67,7 @@ overwrites a file that already exists. Then:
 4. **Choose a notification channel** in `.env` (see [Notifications](#notifications-env)).
 5. **Run it:**
    ```bash
-   npm start          # one run; the browser stays open until you press ENTER
+   npm start          # one run; the last browser stays open until you press ENTER
    npm run watch      # keeps running: one run every 30-60 minutes, 07:00-22:00
    ```
 
@@ -79,14 +79,17 @@ listing that passes your filters is sent to your phone.
 
 For every enabled search, in random order and with a pause between portals:
 
-1. opens the portal's home page (if `homeUrl` is set), accepts the cookie banner, then goes to
+1. launches a browser with the portal's own profile (`browser-profile/<site id>/`: cookies and
+   history are kept between runs but never shared with other portals), closed once the portal
+   is done;
+2. opens the portal's home page (if `homeUrl` is set), accepts the cookie banner, then goes to
    your search URL, as a person would;
-2. waits for the listings, scrolls through the page "reading" it, and extracts the listings
+3. waits for the listings, scrolls through the page "reading" it, and extracts the listings
    with the site definition;
-3. moves to the next page by clicking the "next" button (2 pages on a portal's first run, then
+4. moves to the next page by clicking the "next" button (2 pages on a portal's first run, then
    1: new listings appear at the top when the search is sorted by newest);
-4. compares the listings with `data/seen.json`: only never-seen ones are notified;
-5. saves everything (`data/seen.json`, plus `data/latest.json` with the listings of the run).
+5. compares the listings with `data/seen.json`: only never-seen ones are notified;
+6. saves everything (`data/seen.json`, plus `data/latest.json` with the listings of the run).
 
 **Possible duplicates:** a listing with the same price, surface and rooms as one already seen on
 *another* portal is still notified, marked `possible duplicate of <portal>`.
@@ -333,6 +336,8 @@ What happens:
 2. the scraper stops visiting that portal, saves `data/debug/<Portal name>_blocked.*` and sends
    you a notification, e.g. *"My Portal: access blocked. DataDome captcha. The site will not be
    visited for 6 h"*;
+   its browser profile (`browser-profile/<site id>/`) is deleted, so the next visit starts
+   without the cookies that may have marked it as a bot;
 3. the portal is skipped until the pause ends. Each consecutive block doubles the pause (6, 12,
    24, 48 hours by default, see `blocking` in the settings), and a successful visit resets it.
    The other portals keep running normally.
@@ -423,7 +428,7 @@ sudo systemctl stop rental-scraper             # stop it
 | Command | What it does |
 |---------|--------------|
 | `npm run setup` | Creates `user/` and `.env` from the examples (never overwrites) |
-| `npm start` | One run; the browser stays open until you press ENTER |
+| `npm start` | One run; the last portal's browser stays open until you press ENTER |
 | `npm start -- --retry-blocked` | One run that also visits the portals paused after a block |
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
 | `npm run check-site -- <id or file> <page.html>` | Tests a site definition offline |

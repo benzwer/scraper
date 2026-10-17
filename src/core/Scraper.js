@@ -1,3 +1,5 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const readline = require('node:readline/promises');
 const { chromium } = require('playwright-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -11,7 +13,7 @@ chromium.use(StealthPlugin());
 const formatTime = iso =>
   new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
 
-// Orchestrator: opens the browser, goes through the sites one at a time, saves and notifies.
+// Orchestrator: goes through the sites one at a time, each in its own browser, saves and notifies.
 class Scraper {
   constructor({ config, sites, store, notifier }) {
     this.config = config;
@@ -62,27 +64,30 @@ class Scraper {
       return { listings: [] };
     }
 
-    const context = await chromium.launchPersistentContext(config.paths.profileDir, {
-      headless: config.browser.headless,
-      viewport: null,
-      locale: config.browser.locale,
-      timezoneId: config.browser.timezoneId,
-      args: config.browser.args
-    });
-
     const allListings = [];
+    let session = null;
 
     try {
       const order = shuffle(sites);
 
       for (let i = 0; i < order.length; i++) {
         const site = order[i];
+        const isLast = i === order.length - 1;
         const firstRun = !store.hasSource(site.name);
         const maxPages = firstRun ? config.pages.firstRun : config.pages.incremental;
 
         this.log.info(`${site.name}: ${maxPages} page(s)${firstRun ? ' (first run)' : ''}`);
 
-        const { listings, blocked } = await site.scrape(context, maxPages);
+        session = await this.openBrowser(site);
+        const { listings, blocked } = await site.scrape(session.context, maxPages);
+        session.blocked = Boolean(blocked);
+
+        // In interactive mode the last browser stays open until the user presses ENTER.
+        if (!isLast || !interactive) {
+          await this.closeBrowser(session);
+          session = null;
+        }
+
         allListings.push(...listings);
 
         const { added, duplicates } = store.registerMany(listings);
@@ -100,7 +105,7 @@ class Scraper {
 
         await store.save();
 
-        if (i < order.length - 1) {
+        if (!isLast) {
           this.log.info('Pausing before the next portal...');
           await delay(...config.timing.pauseBetweenSitesMs);
         }
@@ -110,18 +115,51 @@ class Scraper {
 
       this.log.info(`Run finished: ${allListings.length} listings read in total.`);
 
-      if (interactive) {
+      if (interactive && session) {
         console.log('\nThe browser stays open. Press ENTER in the terminal to close it.');
         const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
         await rl.question('');
         rl.close();
       }
     } finally {
-      await context.close().catch(() => {});
-      this.log.info('Browser closed.');
+      if (session) await this.closeBrowser(session);
     }
 
     return { listings: allListings };
+  }
+
+  // Every portal gets its own browser and its own persistent profile: the portal sees a returning
+  // visitor (cookie consent, anti-bot cookies), while nothing is shared with the other portals.
+  profileDirOf(site) {
+    return path.join(this.config.paths.profileDir, site.definition.id);
+  }
+
+  async openBrowser(site) {
+    const { browser: options } = this.config;
+    const profileDir = this.profileDirOf(site);
+    const context = await chromium.launchPersistentContext(profileDir, {
+      headless: options.headless,
+      viewport: null,
+      locale: options.locale,
+      timezoneId: options.timezoneId,
+      args: options.args
+    });
+    return { context, siteName: site.name, profileDir, blocked: false };
+  }
+
+  // After a block the profile is deleted (once the browser is closed, so no file is in use):
+  // its cookies may mark us as a bot, and the next visit starts clean.
+  async closeBrowser(session) {
+    await session.context.close().catch(() => {});
+    this.log.info('Browser closed.');
+    if (!session.blocked) return;
+
+    try {
+      await fs.rm(session.profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+      this.log.info(`${session.siteName}: browser profile deleted after the block.`);
+    } catch (error) {
+      this.log.warn(`${session.siteName}: could not delete the browser profile (${error.message}).`);
+    }
   }
 
   async notifyNew(siteName, added, firstRun) {

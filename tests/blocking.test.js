@@ -96,3 +96,24 @@ test('the scraper skips paused sites, notifies blocks and can retry on request',
   assert.deepEqual(scraper.sitesToVisit().map(site => site.name), ['B']);
   assert.deepEqual(scraper.sitesToVisit({ retryBlocked: true }).map(site => site.name), ['A', 'B']);
 });
+
+test('each site has its own profile, deleted only after a block', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'profiles-'));
+  const scraper = new Scraper({ config: { paths: { profileDir } }, sites: [], store: null, notifier: null });
+  const site = id => ({ name: id.toUpperCase(), definition: { id } });
+  const sessionOf = (id, blocked) => {
+    const dir = scraper.profileDirOf(site(id));
+    fs.mkdirSync(dir, { recursive: true });
+    return { context: { close: async () => {} }, siteName: id, profileDir: dir, blocked };
+  };
+
+  assert.equal(scraper.profileDirOf(site('a')), path.join(profileDir, 'a'));
+
+  await scraper.closeBrowser(sessionOf('a', false));
+  await scraper.closeBrowser(sessionOf('b', true));
+
+  assert.ok(fs.existsSync(path.join(profileDir, 'a')));
+  assert.ok(!fs.existsSync(path.join(profileDir, 'b')));
+
+  fs.rmSync(profileDir, { recursive: true, force: true });
+});
