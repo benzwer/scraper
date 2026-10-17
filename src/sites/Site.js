@@ -336,4 +336,4 @@ class Site {
   }
 }
 
-module.exports = { Site };
+module.exports = { Site, SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE };

@@ -57,7 +57,9 @@ npm run setup
 overwrites a file that already exists. Then:
 
 1. **Describe your portals** in `user/sites/`: one JSON file per portal. Start from the
-   `*-example.json` files and read [Site definitions](#site-definitions-usersitesjson).
+   `*-example.json` files and read [Site definitions](#site-definitions-usersitesjson), or let
+   `npm run analyze-page` draft one for you (see
+   [Writing a definition](#writing-a-definition-step-by-step)).
 2. **Add your searches** to `user/config.json`: open the portal in your browser, run the search
    with your filters (city, rooms, price, *newest first*), and copy the URL of the results page.
 3. **Check each definition** on a page saved from the portal (no requests are sent):
@@ -298,11 +300,32 @@ use `require` or variables defined outside the function. See
 
 1. **Save a results page.** In the browser: *Save page as… → Web page, HTML only*. Or run the
    scraper once: when extraction fails, it saves the page to `data/debug/`.
-2. **Find the listings.** Use the browser's developer tools (right click → *Inspect* on a
-   listing) to find a selector that matches every card, or look for the JSON in the page source.
-   Prefer stable names (`data-*` attributes, meaningful classes) over generated ones like
-   `css-1x2y3z`.
-3. **Write `user/sites/my-portal.json`**, starting from the closest example.
+2. **Analyse the page** to find the listings and the selectors:
+   ```bash
+   npm run analyze-page -- path/to/saved-page.html --base-url https://www.my-portal.example/
+   npm run analyze-page -- --url https://www.my-portal.example/rent/my-city
+   ```
+   It looks for the listings both as repeated HTML cards and as JSON embedded in a `<script>`,
+   and for each field shows the suggested selector or path, how many listings it covers and a
+   sample value. It also reports:
+   - **next page**: whether the built-in detection already finds the button, or which
+     selector to put in `selectors.next`;
+   - **cookie banner**: candidates for `selectors.cookie`;
+   - **popups**: for each popup or overlay, whether it is marked as a dialog (closed
+     automatically when it is about saving the search) or is a plain `<div>`, and in that case
+     the selector of its close button for `selectors.popups`.
+
+   It ends with a **validated draft definition**: add `--write user/sites/my-portal.json` to save
+   it. Only stable names are suggested (`data-*` attributes, meaningful classes), never generated
+   ones like `css-1x2y3z`. Fields it cannot recognise (often `city`) must be added by hand with
+   the browser's developer tools (right click → *Inspect*).
+
+   With a file the page is opened offline, like `check-site`; stylesheets are not loaded, so
+   popups that are not marked as dialogs can be missed. With `--url` a visible browser opens with
+   a temporary profile: reach the results page, wait for the popup to appear and press ENTER in
+   the terminal. The live page is analysed and a snapshot is saved to
+   `data/debug/analyze_<host>.html`, ready for `check-site`.
+3. **Write `user/sites/my-portal.json`** from the draft, or from the closest example.
 4. **Check it**, as many times as needed:
    ```bash
    npm run check-site -- my-portal path/to/saved-page.html
@@ -432,6 +455,7 @@ sudo systemctl stop rental-scraper             # stop it
 | `npm start` | One run; the last portal's browser stays open until you press ENTER |
 | `npm start -- --retry-blocked` | One run that also visits the portals paused after a block |
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
+| `npm run analyze-page -- <page.html> \| --url <url>` | Analyses a results page and drafts a site definition (`--write <file>` to save it) |
 | `npm run check-site -- <id or file> <page.html>` | Tests a site definition offline |
 | `npm test` | Unit tests, no network |
 
@@ -446,13 +470,14 @@ src/core/Scraper.js         orchestrator: portal order, pauses, saving, notifica
 src/core/ResultStore.js     listings already seen, cross-portal duplicates, cleanup
 src/sites/definitions.js    loads and validates the site definitions
 src/sites/extract.js        generic css/json extractor (runs in the page)
+src/sites/analyze.js        page analysis and draft definitions for analyze-page
 src/sites/blocking.js       recognises captchas and "access denied" pages
 src/sites/Site.js           flow for one portal: home -> search -> cookies -> pages
 src/sites/index.js          pairs the searches with their definitions
 src/human/HumanBehavior.js  mouse, wheel, clicks and pauses
 src/models/listing.js       common listing schema, parsing, filters
 src/notify/Notifier.js      ntfy and Telegram
-src/tools/                  setup and check-site commands
+src/tools/                  setup, analyze-page and check-site commands
 tests/                      unit tests and synthetic pages for the examples
 user/                       YOUR config and site definitions (not versioned)
 tests/private/              YOUR tests and saved pages (not versioned)

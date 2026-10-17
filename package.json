@@ -10,6 +10,7 @@
     "watch": "node src/index.js --watch",
     "setup": "node src/tools/setup.js",
     "check-site": "node src/tools/check-site.js",
+    "analyze-page": "node src/tools/analyze-page.js",
     "test": "node --test"
   },
   "engines": { "node": ">=18" },

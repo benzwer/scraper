@@ -9,6 +9,7 @@ const { chromium } = require('playwright');
 const defaults = require('../../config/default');
 const { Site } = require('../sites/Site');
 const { loadSiteDefinition, loadSiteDefinitions, FIELDS } = require('../sites/definitions');
+const { openSavedPage } = require('./saved-page');
 
 const USAGE =
   'Usage: npm run check-site -- <site-id | path/to/definition.json> <page.html> ' +
@@ -50,15 +51,7 @@ async function main() {
 
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext({ javaScriptEnabled: false });
-    await context.route('**/*', route =>
-      route.request().url() === baseUrl
-        ? route.fulfill({ body: html, contentType: 'text/html; charset=utf-8' })
-        : route.abort()
-    );
-
-    const page = await context.newPage();
-    await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+    const page = await openSavedPage(browser, html, baseUrl);
 
     const site = new Site(definition, { url: baseUrl }, { config: defaults, notifier: null });
     const { ready, cookie } = definition.selectors;
