@@ -303,8 +303,9 @@ use `require` or variables defined outside the function. See
 2. **Analyse the page** to find the listings and the selectors:
    ```bash
    npm run analyze-page -- path/to/saved-page.html --base-url https://www.my-portal.example/
-   npm run analyze-page -- --url https://www.my-portal.example/rent/my-city
+   npm run analyze-page -- --url "https://www.my-portal.example/rent?city=my-city&sort=newest"
    ```
+   Always put the URL in quotes: characters like `&` and `;` would otherwise cut it.
    It looks for the listings both as repeated HTML cards and as JSON embedded in a `<script>`,
    and for each field shows the suggested selector or path, how many listings it covers and a
    sample value. It also reports:
@@ -315,8 +316,12 @@ use `require` or variables defined outside the function. See
      automatically when it is about saving the search) or is a plain `<div>`, and in that case
      the selector of its close button for `selectors.popups`.
 
-   It ends with a **validated draft definition**: add `--write user/sites/my-portal.json` to save
-   it. Only stable names are suggested (`data-*` attributes, meaningful classes), never generated
+   It ends with a **validated draft definition** and asks whether to save it: press ENTER to save
+   it as `user/sites/<id>.json`, type another path, or `n` to skip (`--write <file>` saves it
+   without asking; an existing file is never overwritten). Then it lists the **next steps** with
+   the exact commands: complete the draft, check it with `check-site`, and the entry to add to
+   `"searches"` in `user/config.json`. Only stable names are suggested (`data-*` attributes,
+   meaningful classes), never generated
    ones like `css-1x2y3z`. Fields it cannot recognise (often `city`) must be added by hand with
    the browser's developer tools (right click → *Inspect*).
 
@@ -325,6 +330,14 @@ use `require` or variables defined outside the function. See
    a temporary profile: reach the results page, wait for the popup to appear and press ENTER in
    the terminal. The live page is analysed and a snapshot is saved to
    `data/debug/analyze_<host>.html`, ready for `check-site`.
+
+   **The page ignores the filters in its URL, or shows no listings?** Some portals load the
+   results with a separate request (fetch/XHR) and build its filters from the search form or
+   from the browser's storage, not from the page URL. With `--url` the tool lists these requests
+   (size, type, URL and decoded URL; `(empty)` when nothing came back). Copy the one that loads
+   the listings, put your filters in it, and analyse it directly:
+   `npm run analyze-page -- --url "<request url>"`. If the listings are there, use that URL as
+   the search URL in `user/config.json`.
 3. **Write `user/sites/my-portal.json`** from the draft, or from the closest example.
 4. **Check it**, as many times as needed:
    ```bash

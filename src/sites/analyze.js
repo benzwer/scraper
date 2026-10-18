@@ -552,4 +552,20 @@ function buildDraft(report, { nextHandled = false } = {}) {
   return { definition, notes };
 }
 
-module.exports = { analyzePage, buildDraft };
+// Some portals load the results with a fetch/XHR request and ignore the filters in the page URL:
+// the URL of that request is then the one to use as search URL. Keeps the requests (recorded by
+// analyze-page --url) sent to the portal itself that returned HTML or JSON, largest first.
+function pickDataRequests(requests, pageUrl, max = 8) {
+  const hostOf = url => new URL(url).hostname.replace(/^www\./, '');
+  const site = hostOf(pageUrl);
+  const latest = new Map(requests.map(request => [request.url, request]));
+  return [...latest.values()]
+    .filter(({ url, contentType }) => {
+      const host = hostOf(url);
+      return (host === site || host.endsWith(`.${site}`)) && /html|json/i.test(contentType || '');
+    })
+    .sort((a, b) => b.size - a.size)
+    .slice(0, max);
+}
+
+module.exports = { analyzePage, buildDraft, pickDataRequests };

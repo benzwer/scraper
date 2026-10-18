@@ -1,14 +1,16 @@
 // npm run analyze-page -- <page.html> [--base-url <url>] [--write <definition.json>]
-// npm run analyze-page -- --url <url> [--write <definition.json>]
+// npm run analyze-page -- --url "<url>" [--write <definition.json>]
 //
 // Helps writing a site definition: finds the listings (HTML cards or embedded JSON) and suggests
 // selectors and paths for every field, plus the next-page button, the cookie banner and the
 // popups (telling whether the scraper closes them by itself or a selectors.popups entry is
-// needed). Ends with a validated draft definition.
+// needed). Ends with a validated draft definition, offers to save it and lists the next steps.
 //
 // With a file the page is opened offline, like check-site. With --url a visible browser opens:
 // you reach the results page and any popup, then press ENTER to analyse the live page; a snapshot
-// is saved to data/debug/ to use with check-site.
+// is saved to data/debug/ to use with check-site, and the data requests made by the page
+// (fetch/XHR) are listed, for portals that load the results with them and ignore the filters in
+// the page URL.
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline/promises');
@@ -17,7 +19,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 const defaults = require('../../config/default');
 const { Site, SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE } = require('../sites/Site');
-const { analyzePage, buildDraft } = require('../sites/analyze');
+const { analyzePage, buildDraft, pickDataRequests } = require('../sites/analyze');
 const { validateDefinition, FIELDS } = require('../sites/definitions');
 const { findBlockSignal } = require('../sites/blocking');
 const { openSavedPage } = require('./saved-page');
@@ -26,7 +28,8 @@ chromium.use(StealthPlugin());
 
 const USAGE =
   'Usage: npm run analyze-page -- <page.html> [--base-url <url>] [--write <definition.json>]\n' +
-  '       npm run analyze-page -- --url <url> [--write <definition.json>]';
+  '       npm run analyze-page -- --url "<url>" [--write <definition.json>]\n' +
+  'Put the URL in quotes: characters like & and ; would otherwise cut it.';
 
 function parseArgs(argv) {
   const args = { file: null, url: null, baseUrl: null, write: null };
@@ -44,6 +47,15 @@ function parseArgs(argv) {
 }
 
 const heading = title => console.log(`\n== ${title} ==`);
+
+async function ask(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return (await rl.question(question)).trim();
+  } finally {
+    rl.close();
+  }
+}
 const coverage = (field, total) => `${field.coverage}/${total}`.padEnd(6);
 
 function printCards(cards) {
@@ -132,7 +144,29 @@ function printPopups(popups, live) {
   });
 }
 
-async function analyze(page, { live }) {
+function printDataRequests(requests) {
+  heading('Data loaded by the page (fetch/XHR)');
+  if (!requests.length) return console.log('  none from the portal itself');
+
+  const size = bytes => (bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`);
+  for (const request of requests) {
+    const type = /json/i.test(request.contentType) ? 'json' : 'html';
+    console.log(`  ${size(request.size).padStart(7)}  ${type}  ${request.url}${request.size ? '' : '  (empty)'}`);
+    let decoded = request.url;
+    try {
+      decoded = decodeURIComponent(request.url);
+    } catch {
+      // malformed escape: shown as is
+    }
+    if (decoded !== request.url) console.log(`${''.padStart(17)}decoded: ${decoded}`);
+  }
+  console.log('  If the page shows no listings, or ignores the filters in its URL, it probably loads them');
+  console.log('  with one of these requests. Analyse that URL directly, with your filters in it:');
+  console.log('    npm run analyze-page -- --url "<request url>"');
+  console.log('  and if the listings are there, use it as the search URL in user/config.json.');
+}
+
+async function analyze(page, { live, dataRequests = null }) {
   const report = await page.evaluate(analyzePage, {
     saveSearchText: SAVE_SEARCH_TEXT_RE.source,
     closeName: CLOSE_NAME_RE.source
@@ -160,15 +194,57 @@ async function analyze(page, { live }) {
   printNext(report.next, nextHandled);
   printCookie(report.cookie, live);
   printPopups(report.popups, live);
+  if (dataRequests) printDataRequests(pickDataRequests(dataRequests, report.url));
 
   return buildDraft(report, { nextHandled });
 }
 
-function printDraft({ definition, notes }, args, pageFile) {
+const sitesDir = path.join(defaults.paths.userDir, 'sites');
+
+function writeDraft(file, json) {
+  fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+  fs.writeFileSync(file, json, { encoding: 'utf8', flag: 'wx' });   // never overwrites
+  console.log(`Saved to ${file}`);
+  return file;
+}
+
+// ENTER saves to the default path, another path saves there, "n" skips.
+async function askToSave(json, defaultFile) {
+  if (!process.stdin.isTTY) return null;
+
+  let question = `Save the draft? ENTER = ${defaultFile}, or type another path, "n" to skip: `;
+  for (;;) {
+    const answer = await ask(question);
+    if (/^no?$/i.test(answer)) return null;
+    const file = answer || defaultFile;
+    if (!fs.existsSync(file)) return writeDraft(file, json);
+    question = `${file} already exists and is not overwritten: type another path, or "n" to skip: `;
+  }
+}
+
+function printNextSteps(definition, savedFile, defaultFile, { pageFile, searchUrl }) {
+  const file = savedFile || defaultFile;
+  // check-site finds a definition by its id only in user/sites/.
+  const inSitesDir = path.dirname(path.resolve(file)) === sitesDir;
+  const search = JSON.stringify({ site: definition.id, url: searchUrl || '<URL of the results page>' });
+
+  heading('Next steps');
+  [
+    savedFile ? null : `Save the draft above as ${file} (or run again with --write ${file}).`,
+    `Complete ${file} by hand: the fields "not found" above (often city) and the notes.`,
+    `Check it on the page:  npm run check-site -- ${inSitesDir ? definition.id : file} ${pageFile}`,
+    `Add the search to user/config.json, in "searches":\n       ${search}`,
+    'Run it once, watching the browser:  npm start'
+  ].filter(Boolean).forEach((step, i) => console.log(`  ${i + 1}. ${step}`));
+}
+
+async function finishDraft({ definition, notes }, args, { pageFile, searchUrl = null }) {
   heading('Draft definition');
+  let valid = true;
   try {
     validateDefinition(definition, { file: '(draft)' });
   } catch (error) {
+    valid = false;
     console.log(`  not valid yet:\n${error.message.split('\n').slice(1).join('\n')}`);
   }
   for (const note of notes) console.log(`  note: ${note}`);
@@ -177,15 +253,13 @@ function printDraft({ definition, notes }, args, pageFile) {
   const json = `${JSON.stringify(definition, null, 2)}\n`;
   console.log(json);
 
-  const target = args.write || `user/sites/${definition.id}.json`;
-  if (args.write) {
-    fs.mkdirSync(path.dirname(path.resolve(args.write)), { recursive: true });
-    fs.writeFileSync(args.write, json, 'utf8');
-    console.log(`Saved to ${args.write}.`);
-  } else {
-    console.log(`Save it with --write ${target} (or copy it), then`);
+  const defaultFile = path.relative(process.cwd(), path.join(sitesDir, `${definition.id}.json`));
+  if (!valid) {
+    console.log(`Warning: the draft is not valid yet. Saved in ${path.relative(process.cwd(), sitesDir)}, it stops`);
+    console.log('npm start and check-site until you complete it.');
   }
-  console.log(`check it: npm run check-site -- ${target} ${pageFile}`);
+  const savedFile = args.write ? writeDraft(args.write, json) : await askToSave(json, defaultFile);
+  printNextSteps(definition, savedFile, defaultFile, { pageFile, searchUrl });
 }
 
 async function analyzeFile(args) {
@@ -197,7 +271,7 @@ async function analyzeFile(args) {
     const page = await openSavedPage(browser, html, baseUrl);
     console.log(`File:  ${args.file} (offline, scripts disabled${args.baseUrl ? '' : '; use --base-url <portal url> for real links'})`);
     const draft = await analyze(page, { live: false });
-    if (draft) printDraft(draft, args, args.file);
+    if (draft) await finishDraft(draft, args, { pageFile: args.file });
   } finally {
     await browser.close();
   }
@@ -212,15 +286,27 @@ async function analyzeLive(args) {
       locale: options.locale,
       timezoneId: options.timezoneId
     });
+    // Data requests (fetch/XHR) of each tab since its last navigation.
+    const dataRequests = new Map();
+    context.on('page', tab => {
+      const requests = [];
+      dataRequests.set(tab, requests);
+      tab.on('response', async response => {
+        const request = response.request();
+        if (request.isNavigationRequest() && request.frame() === tab.mainFrame()) requests.length = 0;
+        if (!['xhr', 'fetch'].includes(request.resourceType())) return;
+        const size = await response.body().then(body => body.length, () => 0);
+        requests.push({ url: response.url(), contentType: response.headers()['content-type'] || '', size });
+      });
+    });
+
     const page = await context.newPage();
     await page.goto(args.url, { waitUntil: 'domcontentloaded', timeout: defaults.timing.navigationTimeout });
 
     console.log('A browser window is open (temporary profile, nothing is saved).');
     console.log('Reach the search results and wait for any popup you want to analyse:');
     console.log('leave it open, then press ENTER here.');
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    await rl.question('');
-    rl.close();
+    await ask('');
 
     const current = context.pages().filter(p => !p.isClosed()).at(-1);
     if (!current) throw new Error('The browser tab was closed: nothing to analyse.');
@@ -232,8 +318,10 @@ async function analyzeLive(args) {
     fs.writeFileSync(snapshot, await current.content(), 'utf8');
     console.log(`Snapshot saved to ${path.relative(process.cwd(), snapshot)}\n`);
 
-    const draft = await analyze(current, { live: true });
-    if (draft) printDraft(draft, args, path.relative(process.cwd(), snapshot));
+    const draft = await analyze(current, { live: true, dataRequests: dataRequests.get(current) || [] });
+    if (draft) {
+      await finishDraft(draft, args, { pageFile: path.relative(process.cwd(), snapshot), searchUrl: current.url() });
+    }
   } finally {
     await browser.close();
   }

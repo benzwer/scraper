@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
-const { analyzePage, buildDraft } = require('../src/sites/analyze');
+const { analyzePage, buildDraft, pickDataRequests } = require('../src/sites/analyze');
 const { validateDefinition } = require('../src/sites/definitions');
 const { SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE } = require('../src/sites/Site');
 const { extractFromFile } = require('./helpers/dom');
@@ -97,4 +97,21 @@ test('the draft id and name come from the page host', () => {
   assert.equal(definition.id, 'my-portal-example');
   assert.equal(definition.name, 'my-portal.example');
   assert.equal(definition.homeUrl, 'https://www.my-portal.example/');
+});
+
+test('data requests: only HTML or JSON from the portal itself, largest first', () => {
+  const requests = [
+    { url: 'https://www.my-portal.example/api/search?city=x', contentType: 'application/json', size: 300 },
+    { url: 'https://www.my-portal.example/list.php?offset=0', contentType: 'text/html; charset=utf-8', size: 0 },
+    { url: 'https://api.my-portal.example/results', contentType: 'application/json', size: 900 },
+    { url: 'https://www.my-portal.example/api/search?city=x', contentType: 'application/json', size: 500 },
+    { url: 'https://www.my-portal.example/logo.svg', contentType: 'image/svg+xml', size: 2000 },
+    { url: 'https://tracker.example.net/collect', contentType: 'application/json', size: 4000 }
+  ];
+  const picked = pickDataRequests(requests, 'https://www.my-portal.example/rent?city=x');
+  assert.deepEqual(picked.map(request => [request.url, request.size]), [
+    ['https://api.my-portal.example/results', 900],
+    ['https://www.my-portal.example/api/search?city=x', 500],   // the latest response of a repeated URL
+    ['https://www.my-portal.example/list.php?offset=0', 0]
+  ]);
 });
