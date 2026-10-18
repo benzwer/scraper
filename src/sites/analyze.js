@@ -137,9 +137,13 @@ function analyzePage({ saveSearchText, closeName }) {
 
   // The selector, relative to the item, that finds `el` in the first item and the most values
   // overall. Climbs to the parent when the element cannot be told apart from its siblings; a bare
-  // tag ("li") is only used when no ancestor has a more meaningful selector.
-  const relativeField = (items, firstItem, el, test) =>
-    relativeFieldPass(items, firstItem, el, test, false) || relativeFieldPass(items, firstItem, el, test, true);
+  // tag ("li") is only used when it covers more items than any more meaningful selector (a
+  // title="…" selector, for one, only fits the listing it was taken from).
+  const relativeField = (items, firstItem, el, test) => {
+    const meaningful = relativeFieldPass(items, firstItem, el, test, false);
+    const any = relativeFieldPass(items, firstItem, el, test, true);
+    return !meaningful || (any && any.coverage > meaningful.coverage) ? any : meaningful;
+  };
 
   const relativeFieldPass = (items, firstItem, el, test, allowBareTag) => {
     for (let node = el; node && node !== firstItem; node = node.parentElement) {
@@ -229,13 +233,16 @@ function analyzePage({ saveSearchText, closeName }) {
     const candidates = ownSelectors(first).filter(c => c !== tag && !/\[(aria-label|title|rel)=/.test(c));
     candidates.push(`${uniqueSelector(first.parentElement)} > ${tag}`);
 
+    // The tightest selector: a generic class (".col-sm-12") also matches the menu or the footer.
+    let best = null;
     for (const selector of candidates) {
       const found = new Set(qsa(document, selector));
-      if (members.every(m => found.has(m)) && found.size <= members.length * 1.5 + 1) {
-        return { selector, count: found.size };
+      if (members.every(m => found.has(m)) && found.size <= members.length * 1.5 + 1 &&
+        (!best || found.size < best.count)) {
+        best = { selector, count: found.size };
       }
     }
-    return null;
+    return best;
   };
 
   const findCards = () => {

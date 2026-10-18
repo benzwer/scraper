@@ -115,3 +115,12 @@ test('data requests: only HTML or JSON from the portal itself, largest first', (
     ['https://www.my-portal.example/list.php?offset=0', 0]
   ]);
 });
+
+test('cards: the tightest selector, not a layout class shared with the header; links by tag', () => {
+  const report = analyzeFile('generic-class-example.html');
+
+  assert.equal(report.cards[0].selector, '.listing');      // ".col-12" also matches the header
+  assert.equal(report.cards[0].count, 3);
+  assert.equal(report.cards[0].fields.url.selector, 'a');   // a[title="…"] fits only one card
+  assert.equal(report.cards[0].fields.url.coverage, 3);
+});
