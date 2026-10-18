@@ -61,4 +61,31 @@ function loadConfig(defaults, userDir = defaults.paths.userDir) {
   return { config: deepMerge(defaults, overrides), searches };
 }
 
-module.exports = { loadConfig, deepMerge };
+// Appends a search to "searches" in <userDir>/config.json, rewritten as formatted JSON (keeping
+// its line endings). Returns false, changing nothing, when the site already has a search: the
+// scraper runs one search per site.
+function addSearch(userDir, search) {
+  const file = path.join(userDir, 'config.json');
+  if (!fs.existsSync(file)) {
+    throw new Error(`${file} not found. Run "npm run setup" to create it from the examples.`);
+  }
+
+  const text = fs.readFileSync(file, 'utf8');
+  let user;
+  try {
+    user = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${file}: invalid JSON (${error.message}), not changed`);
+  }
+  if (!isObject(user)) throw new Error(`${file}: must contain a JSON object, not changed`);
+
+  const searches = Array.isArray(user.searches) ? user.searches : [];
+  if (searches.some(item => isObject(item) && item.site === search.site)) return false;
+
+  user.searches = [...searches, search];
+  const json = `${JSON.stringify(user, null, 2)}\n`;
+  fs.writeFileSync(file, text.includes('\r\n') ? json.replace(/\n/g, '\r\n') : json, 'utf8');
+  return true;
+}
+
+module.exports = { loadConfig, addSearch, deepMerge };

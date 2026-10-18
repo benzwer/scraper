@@ -4,7 +4,8 @@
 // Helps writing a site definition: finds the listings (HTML cards or embedded JSON) and suggests
 // selectors and paths for every field, plus the next-page button, the cookie banner and the
 // popups (telling whether the scraper closes them by itself or a selectors.popups entry is
-// needed). Ends with a validated draft definition, offers to save it and lists the next steps.
+// needed). Ends with a validated draft definition, offers to save it and to add its search to
+// user/config.json, and lists the next steps.
 //
 // With a file the page is opened offline, like check-site. With --url a visible browser opens:
 // you reach the results page and any popup, then press ENTER to analyse the live page; a snapshot
@@ -18,6 +19,7 @@ const { chromium } = require('playwright-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 const defaults = require('../../config/default');
+const { addSearch } = require('../core/config');
 const { Site, SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE } = require('../sites/Site');
 const { analyzePage, buildDraft, pickDataRequests } = require('../sites/analyze');
 const { validateDefinition, FIELDS } = require('../sites/definitions');
@@ -222,18 +224,55 @@ async function askToSave(json, defaultFile) {
   }
 }
 
-function printNextSteps(definition, savedFile, defaultFile, { pageFile, searchUrl }) {
+// check-site and the scraper find a definition by its id only in user/sites/.
+const inSitesDir = file => path.dirname(path.resolve(file)) === sitesDir;
+
+// For a draft saved in user/sites/: asks to add its search to user/config.json, with the URL of
+// the analysed page (--url) or one typed in. Returns { added, exists, url }.
+async function askToAddSearch(definition, searchUrl) {
+  const result = { added: false, exists: false, url: searchUrl };
+  if (!process.stdin.isTTY) return result;
+
+  if (searchUrl) {
+    console.log(`Search URL: ${searchUrl}`);
+    if (/^no?$/i.test(await ask('Add it to user/config.json? ENTER = yes, "n" to skip: '))) return result;
+  } else {
+    for (;;) {
+      const answer = await ask('URL of the results page, to add the search to user/config.json (ENTER to skip): ');
+      if (!answer) return result;
+      if (/^https?:\/\//.test(answer)) {
+        result.url = answer;
+        break;
+      }
+      console.log('  it must be an http(s) URL');
+    }
+  }
+
+  try {
+    result.added = addSearch(defaults.paths.userDir, { site: definition.id, url: result.url });
+    result.exists = !result.added;
+    console.log(result.added
+      ? 'Search added to user/config.json'
+      : `user/config.json already has a search for "${definition.id}": not changed.`);
+  } catch (error) {
+    console.log(error.message);
+  }
+  return result;
+}
+
+function printNextSteps(definition, savedFile, defaultFile, { pageFile, search }) {
   const file = savedFile || defaultFile;
-  // check-site finds a definition by its id only in user/sites/.
-  const inSitesDir = path.dirname(path.resolve(file)) === sitesDir;
-  const search = JSON.stringify({ site: definition.id, url: searchUrl || '<URL of the results page>' });
+  const entry = JSON.stringify({ site: definition.id, url: search.url || '<URL of the results page>' });
+  const searchStep = search.added ? null
+    : search.exists ? `user/config.json already has a search for "${definition.id}": if needed, set its url to\n       ${search.url}`
+      : `Add the search to user/config.json, in "searches":\n       ${entry}`;
 
   heading('Next steps');
   [
     savedFile ? null : `Save the draft above as ${file} (or run again with --write ${file}).`,
     `Complete ${file} by hand: the fields "not found" above (often city) and the notes.`,
-    `Check it on the page:  npm run check-site -- ${inSitesDir ? definition.id : file} ${pageFile}`,
-    `Add the search to user/config.json, in "searches":\n       ${search}`,
+    `Check it on the page:  npm run check-site -- ${inSitesDir(file) ? definition.id : file} ${pageFile}`,
+    searchStep,
     'Run it once, watching the browser:  npm start'
   ].filter(Boolean).forEach((step, i) => console.log(`  ${i + 1}. ${step}`));
 }
@@ -258,7 +297,10 @@ async function finishDraft({ definition, notes }, args, { pageFile, searchUrl = 
     console.log('Note: the draft is not valid yet: until you complete it, npm start skips this site.');
   }
   const savedFile = args.write ? writeDraft(args.write, json) : await askToSave(json, defaultFile);
-  printNextSteps(definition, savedFile, defaultFile, { pageFile, searchUrl });
+  const search = savedFile && inSitesDir(savedFile)
+    ? await askToAddSearch(definition, searchUrl)
+    : { added: false, exists: false, url: searchUrl };
+  printNextSteps(definition, savedFile, defaultFile, { pageFile, search });
 }
 
 async function analyzeFile(args) {

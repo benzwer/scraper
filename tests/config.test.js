@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { loadConfig, deepMerge } = require('../src/core/config');
+const { loadConfig, addSearch, deepMerge } = require('../src/core/config');
 
 const defaults = {
   paths: { userDir: null },
@@ -51,4 +51,25 @@ test('loadConfig rejects typos, missing searches and bad urls', () => {
     /searches\[0\]\.url/
   );
   assert.throws(() => loadConfig(defaults, userDirWith('{ broken')), /invalid JSON/);
+});
+
+test('addSearch appends a search once per site and keeps the other settings', () => {
+  const dir = userDirWith({ searches: [search], filters: { maxPrice: 900 } });
+
+  assert.equal(addSearch(dir, { site: 'new-site', url: 'https://www.example.net/rent?a=1&b=2' }), true);
+  assert.equal(addSearch(dir, { site: 'new-site', url: 'https://www.example.net/other' }), false);
+
+  const { config, searches } = loadConfig(defaults, dir);
+  assert.deepEqual(searches, [search, { site: 'new-site', url: 'https://www.example.net/rent?a=1&b=2' }]);
+  assert.equal(config.filters.maxPrice, 900);
+});
+
+test('addSearch keeps CRLF line endings and never touches an invalid file', () => {
+  const dir = userDirWith(JSON.stringify({ searches: [search] }, null, 2).replace(/\n/g, '\r\n'));
+  addSearch(dir, { site: 'new-site', url: 'https://www.example.net/rent' });
+  assert.match(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'), /^\{\r\n {2}"searches"/);
+
+  const broken = userDirWith('{ "searches": [');
+  assert.throws(() => addSearch(broken, search), /invalid JSON .*not changed/);
+  assert.equal(fs.readFileSync(path.join(broken, 'config.json'), 'utf8'), '{ "searches": [');
 });

@@ -319,12 +319,14 @@ use `require` or variables defined outside the function. See
 
    It ends with a **validated draft definition** and asks whether to save it: press ENTER to save
    it as `user/sites/<id>.json`, type another path, or `n` to skip (`--write <file>` saves it
-   without asking; an existing file is never overwritten). Then it lists the **next steps** with
-   the exact commands: complete the draft, check it with `check-site`, and the entry to add to
-   `"searches"` in `user/config.json`. Only stable names are suggested (`data-*` attributes,
-   meaningful classes), never generated
-   ones like `css-1x2y3z`. Fields it cannot recognise (often `city`) must be added by hand with
-   the browser's developer tools (right click → *Inspect*).
+   without asking; an existing file is never overwritten). When saved in `user/sites/`, it also
+   offers to **add the search to `user/config.json`**: with `--url` it proposes the URL of the
+   analysed page (ENTER to accept), with a file you paste the URL. A site that already has a
+   search is left unchanged (one search per site). Then it lists the **next steps** with the
+   exact commands: complete the draft and check it with `check-site`. Only stable names are
+   suggested (`data-*` attributes, meaningful classes), never generated ones like `css-1x2y3z`.
+   Fields it cannot recognise (often `city`) must be added by hand with the browser's developer
+   tools (right click → *Inspect*).
 
    With a file the page is opened offline, like `check-site`; stylesheets are not loaded, so
    popups that are not marked as dialogs can be missed. With `--url` a visible browser opens with
@@ -349,7 +351,8 @@ use `require` or variables defined outside the function. See
    extracted, which fields are always empty, and the first listings. Options: `--show <n>`
    listings to print, `--base-url <url>` to resolve relative links (default: `homeUrl`).
    You can also pass a file path instead of the id: `npm run check-site -- ./draft.json page.html`.
-5. **Add the search** to `user/config.json` and run `npm start` once, watching the browser.
+5. **Add the search** to `user/config.json` (if `analyze-page` did not add it) and run
+   `npm start` once, watching the browser.
 6. **Optional: a regression test.** Put the saved page and a test in `tests/private/` (ignored by
    git, run by `npm test`). Copy the pattern in [`tests/examples.test.js`](tests/examples.test.js)
    and use `extractFromFile` from `tests/helpers/dom.js`.
