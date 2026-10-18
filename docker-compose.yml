@@ -1,0 +1,21 @@
+# See README, "Running with Docker". Create the folders before the first start:
+#   mkdir -p user data browser-profile
+services:
+  scraper:
+    build: .
+    restart: unless-stopped
+    init: true                # forwards the stop signal to node
+    stop_signal: SIGINT       # the scraper saves and exits on SIGINT, like Ctrl+C
+    stop_grace_period: 30s
+    shm_size: 1gb             # Chromium crashes with Docker's default 64 MB of shared memory
+    env_file: .env
+    environment:
+      TZ: Europe/Rome         # watch.activeHours follows this clock
+    volumes:
+      - ./user:/app/user
+      - ./data:/app/data
+      - ./browser-profile:/app/browser-profile
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"

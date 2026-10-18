@@ -31,6 +31,7 @@ sends a notification to your phone (ntfy or Telegram) **only for the new ones**.
 - [When a site stops working](#when-a-site-stops-working)
 - [When a portal blocks you](#when-a-portal-blocks-you)
 - [Running on a server or VM](#running-on-a-server-or-vm)
+- [Running with Docker](#running-with-docker)
 - [Commands](#commands)
 - [Project structure](#project-structure)
 - [Contributing](#contributing)
@@ -521,6 +522,76 @@ sudo systemctl stop rental-scraper             # stop it
   `"browser": { "headless": true }` to `user/config.json` and run `node src/index.js --watch`
   without `xvfb-run`.
 
+## Running with Docker
+
+An alternative to the setup above, for a machine with Docker (for example a Debian VM on
+Proxmox). The image has Chromium and a virtual screen (Xvfb), and runs the scraper in watch mode.
+Your files stay outside the image, in folders next to `docker-compose.yml`: `user/`, `data/`,
+`browser-profile/` and `.env`. Rebuilding or updating the image never touches them.
+
+### 1. Prepare the VM
+
+Debian 12 or Ubuntu 24.04 without a desktop, **4 GB of RAM** (2 is the minimum) and 20 GB of
+disk. Put it on your home network (bridged), so the portals see your home connection. Install
+Docker:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      # then log out and back in
+```
+
+### 2. Install and start
+
+```bash
+git clone <repository URL> rental-scraper && cd rental-scraper
+mkdir -p user data browser-profile
+```
+
+Copy your `user/` folder and `.env` from your computer (`.env` must exist, even with no
+notification channel):
+
+```bash
+scp -r user .env you@vm-address:~/rental-scraper/     # run this on your computer
+```
+
+To keep the listings already seen, copy `data/seen.json` too, otherwise the first run on the VM
+records them again without notifying. Do not copy `browser-profile/`: a Windows or macOS
+browser profile does not work on Linux, and the VM starts with clean ones.
+
+Then, on the VM:
+
+```bash
+docker compose up -d --build
+docker compose logs -f              # follow the log (also in data/logs/)
+```
+
+It starts again by itself after a crash or a reboot. `docker compose stop` stops it: it gets
+SIGINT, like Ctrl+C, and saves before exiting.
+
+The container runs as the user with uid 1000, normally the first user of the VM (check with
+`id -u`). With a different uid, give that user the folders: `sudo chown -R 1000:1000 user data
+browser-profile`.
+
+The time zone is `Europe/Rome` (`TZ` in `docker-compose.yml`): `watch.activeHours` follows it.
+
+If the build stops at `npm ci` with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`, something between the
+machine and the internet (an antivirus scanning HTTPS, a company proxy) replaces the
+certificates: build on a machine without it, or turn that scanning off.
+
+### 3. Day to day
+
+- **Update:** `git pull && docker compose up -d --build`.
+- **Change a search or a definition:** edit the files on your computer and copy `user/` to the
+  VM again, then `docker compose restart`. Use `analyze-page --url` on your computer: it opens a
+  browser to look at, and nobody sees the VM's screen.
+- **Check a definition on the VM:** `check-site` works offline, so it also runs in a container.
+  `-it` is needed for `--fix`, which asks questions; `--open` does not work there.
+  ```bash
+  docker compose run --rm -it scraper npm run check-site -- my-portal data/debug/<file>.html --fix
+  ```
+- **Debug files:** the screenshots of a portal with no listings are in `data/debug/` on the VM;
+  copy them to your computer with `scp`.
+
 ## Commands
 
 `npm run help` prints this list in the terminal; `npm run <command> -- --help` shows the
@@ -562,6 +633,7 @@ tests/                      unit tests and synthetic pages for the examples
 user/                       YOUR config and site definitions (not versioned)
 tests/private/              YOUR tests and saved pages (not versioned)
 data/                       seen listings, last run, debug files (not versioned)
+Dockerfile, docker-compose.yml  running with Docker (see "Running with Docker")
 ```
 
 ## Contributing

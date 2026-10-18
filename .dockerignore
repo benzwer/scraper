@@ -1,0 +1,11 @@
+# Personal data and secrets are mounted at run time, never copied into the image.
+user
+data
+browser-profile
+.env
+.env.*
+!.env.example
+
+node_modules
+.git
+tests
