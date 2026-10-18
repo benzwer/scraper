@@ -362,7 +362,9 @@ use `require` or variables defined outside the function. See
    ```
    It opens the page offline (scripts disabled, no network) and shows whether the `ready`
    element, the next-page button and the cookie button are found, how many listings were
-   extracted, which fields are always empty, and the first listings. Options: `--show <n>`
+   extracted, which fields are always empty, and the first listings. It also warns about a field
+   with the same value in every listing (often a category code read as the price) and about
+   listings sharing an id (the scraper would count them as one). Options: `--show <n>`
    listings to print, `--base-url <url>` to resolve relative links (default: `homeUrl`).
    You can also pass a file path instead of the id: `npm run check-site -- ./draft.json page.html`.
 

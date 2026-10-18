@@ -86,6 +86,18 @@ test('fix: embedded JSON gets a path', async () => {
   assert.deepEqual(proposals[0].values, ['Shelbyville', 'Shelbyville', null]);
 });
 
+test('fix: embedded JSON with keys like "/size" gets a path through them', async () => {
+  const page = fakePage('embedded-json-features-example.html');
+  const definition = {
+    id: 'json-features-test',
+    name: 'JSON features test',
+    extract: { type: 'json', script: '#app-state', items: 'state.results', fields: { url: 'urls.default' } }
+  };
+  const { proposals } = await propose(page, definition, 'surface', 0, '70');
+  assert.equal(proposals[0].spec, 'features./size.values[0].key');
+  assert.deepEqual(proposals[0].values, [70, 95]);
+});
+
 test('compactSpec writes specs as a person would', () => {
   assert.equal(compactSpec({ selector: '.x', attr: null, match: null }), '.x');
   assert.equal(compactSpec({ path: 'a.b', match: null }), 'a.b');

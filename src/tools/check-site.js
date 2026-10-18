@@ -106,9 +106,24 @@ async function main() {
 
     console.log('Field coverage:');
     for (const field of FIELDS) {
-      const filled = listings.filter(listing => listing[field] != null).length;
-      const flag = filled === 0 ? '  <- always empty' : '';
-      console.log(`  ${field.padEnd(8)} ${filled}/${listings.length}${flag}`);
+      const values = listings.map(listing => listing[field]).filter(value => value != null);
+      // The same value everywhere is suspicious (a category code read as the price), except for
+      // the city; the id and the url have their own check below.
+      const sameEverywhere = listings.length >= 3 && values.length === listings.length &&
+        new Set(values).size === 1 && !['id', 'url', 'city'].includes(field);
+      const flag = values.length === 0 ? '  <- always empty'
+        : sameEverywhere ? '  <- same value in every listing: check it' : '';
+      console.log(`  ${field.padEnd(8)} ${values.length}/${listings.length}${flag}`);
+    }
+
+    // The scraper tells listings apart by id (or url, without an id), like listingKey.
+    const keys = listings.map(listing => listing.id ?? listing.url);
+    const repeated = keys.length - new Set(keys).size;
+    if (repeated) {
+      const keyField = listings.some(listing => listing.id != null) ? 'id' : 'url';
+      console.log(`\nRepeated: ${repeated} listing(s) have the same ${keyField} as another one: the scraper`);
+      console.log(`           counts them as one and would not notify them. Check extract.fields.${keyField}.`);
+      process.exitCode = 1;
     }
 
     const shown = listings.slice(0, args.show);

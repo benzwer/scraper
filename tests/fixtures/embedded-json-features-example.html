@@ -1,0 +1,28 @@
+<!doctype html>
+<html><body>
+<!-- Synthetic page for analyze-page and check-site --fix: the listing data is in "features" with keys
+     like "/size" and values in arrays; misleading paths: a category id equal for every listing,
+     a "parentId" (has "rent" in it), image URLs, a numeric "weight" next to the value. -->
+<script id="app-state" type="application/json">
+{"state":{"results":[
+  {"ref":"ad-9001","subject":"Bright flat near the park",
+   "category":{"id":"12","parentId":"3"},
+   "images":[{"url":"https://img.my-portal.example/9001-1.jpg"}],
+   "urls":{"default":"https://www.my-portal.example/ads/9001"},
+   "geo":{"city":{"id":"4","value":"Springfield"}},
+   "features":{
+     "/price":{"label":"Monthly rent","values":[{"key":"950","value":"950 €"}]},
+     "/size":{"label":"Surface","values":[{"key":"70","value":"70 m²"}]},
+     "/room":{"label":"Rooms","values":[{"key":"3","value":"3","weight":2}]}}},
+  {"ref":"ad-9002","subject":"Loft with terrace",
+   "category":{"id":"12","parentId":"3"},
+   "images":[{"url":"https://img.my-portal.example/9002-1.jpg"}],
+   "urls":{"default":"https://www.my-portal.example/ads/9002"},
+   "geo":{"city":{"id":"4","value":"Springfield"}},
+   "features":{
+     "/price":{"label":"Monthly rent","values":[{"key":"1200","value":"1200 €"}]},
+     "/size":{"label":"Surface","values":[{"key":"95","value":"95 m²"}]},
+     "/room":{"label":"Rooms","values":[{"key":"2","value":"2","weight":1}]}}}
+]}}
+</script>
+</body></html>

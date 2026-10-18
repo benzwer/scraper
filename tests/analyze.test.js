@@ -69,6 +69,33 @@ test('embedded JSON: script, generic items path and field paths', () => {
   assert.deepEqual(listings.map(listing => [listing.id, listing.price, listing.rooms]), [['501', 950, 2], ['502', 1050, 4]]);
 });
 
+test('embedded JSON: keys like "/size", values in arrays, no misleading paths', () => {
+  const report = analyzeFile('embedded-json-features-example.html');
+  const [json] = report.json;
+
+  assert.equal(report.json.length, 1);
+  assert.equal(json.items, 'state.results');
+  // Not category.id (the same for every listing), category.parentId ("rent" inside a word),
+  // geo.city.id (a code), images[0].url (a photo) or values[0].weight (an order).
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(json.fields).map(([name, field]) => [name, field.path])),
+    {
+      url: 'urls.default', title: 'subject', price: 'features./price.values[0].key',
+      surface: 'features./size.values[0].key', rooms: 'features./room.values[0].key', city: 'geo.city.value'
+    }
+  );
+
+  const { definition } = buildDraft(report);
+  const listings = extractFromFile(validateDefinition(definition), fixture('embedded-json-features-example.html'));
+  assert.deepEqual(
+    listings.map(({ url, price, surface, rooms, city }) => [url, price, surface, rooms, city]),
+    [
+      ['https://www.my-portal.example/ads/9001', 950, 70, 3, 'Springfield'],
+      ['https://www.my-portal.example/ads/9002', 1200, 95, 2, 'Springfield']
+    ]
+  );
+});
+
 test('popups: a dialog is closed by the scraper, a plain fixed div needs selectors.popups', () => {
   const report = analyzeFile('popups-example.html');
   const [dialog, overlay] = report.popups;

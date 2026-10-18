@@ -31,14 +31,23 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     surface: '(\\d+(?:[.,]\\d+)?)\\s*(?:m²|m2|mq|sqm|metri)',
     rooms: '(\\d+)\\+?\\s*(?:local[ei]|vani|camer[ae]|stanz[ae]|rooms?|bedrooms?)'
   };
+  // How a JSON path is recognised as a field. "last": the last key, whole. "words": one of the
+  // words of the path ("category.parentId" is category/parent/id: no "rent" in it). "distinct": the
+  // value changes from listing to listing (a category id is the same for all). "name": a text with
+  // letters, not a code or a path. "notWords": a path with one of these words is never the field.
+  // "noArrays": the listing's own value, not one of a list inside it (a photo's id).
+  const SORTING_WORDS = /^(weight|order|position|index|sort|rank|priority|level)$/;
   const JSON_FIELDS = {
-    id: { re: /(^|\.)(id|uuid|listing_?id|ad_?id|property_?id)$/i },
-    url: { re: /(url|link|href|permalink|slug)$/i, string: true },
-    title: { re: /(^|\.)(title|name|headline|subject)$/i, string: true },
-    price: { re: /price|prezzo|rent|canone|cost/i, numeric: true },
-    surface: { re: /surface|superficie|area|size|sqm|square/i, numeric: true },
-    rooms: { re: /rooms?(count)?$|locali|vani|camere|bedrooms?/i, numeric: true },
-    city: { re: /city|citt|comune|town|municipality|locality/i, string: true }
+    id: { last: /^(id|uuid|listing_?id|ad_?id|property_?id)$/i, distinct: true, noArrays: true },
+    url: {
+      words: /^(url|urls|link|links|href|permalink|slug)$/, string: true, distinct: true, noArrays: true,
+      notWords: /^(images?|img|photos?|pictures?|thumbnails?|thumbs?|media|logos?|avatars?|videos?)$/
+    },
+    title: { last: /^(title|name|headline|subject)$/i, string: true },
+    price: { words: /^(prices?|prezzo|rent|canone|cost)$/, numeric: true, notWords: SORTING_WORDS },
+    surface: { words: /^(surface|superficie|area|size|sqm|square|mq)$/, numeric: true, notWords: SORTING_WORDS },
+    rooms: { words: /^(rooms?|locali|vani|camere|bedrooms?)$/, numeric: true, notWords: SORTING_WORDS },
+    city: { words: /^(city|citta|città|comune|town|municipality|locality)$/, string: true, name: true }
   };
 
   const win = document.defaultView;
@@ -303,12 +312,27 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     return current.filter(value => value !== undefined);
   };
 
-  const leafPaths = (object, prefix, depth, out) => {
-    for (const [key, value] of Object.entries(object)) {
-      if (!/^[\w$-]+$/.test(key) || value == null) continue;
-      const path = prefix ? `${prefix}.${key}` : key;
+  // A key that a path can name: anything without the path's own separators ("/size" included).
+  const isPathKey = key => key !== '' && !/[.[\]]/.test(key);
+
+  // "realEstate.features./size.values[0].key" -> real, estate, features, size, values, key.
+  const pathWords = path => path
+    .replace(/(\p{Ll})(\p{Lu})/gu, '$1 $2')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(word => word && !/^\d+$/.test(word));
+  const lastKey = path => path.replace(/(\[\d+\])+$/, '').split(/[.[\]]/).pop();
+
+  // Leaf values of a listing by path; in arrays only the first element is followed ("values[0]").
+  const leafPaths = (node, prefix, depth, out) => {
+    const entries = Array.isArray(node)
+      ? (node[0] && typeof node[0] === 'object' ? [['[0]', node[0]]] : [])
+      : Object.entries(node).filter(([key]) => isPathKey(key));
+    for (const [key, value] of entries) {
+      if (value == null) continue;
+      const path = key === '[0]' ? `${prefix}[0]` : prefix ? `${prefix}.${key}` : key;
       if (typeof value === 'object') {
-        if (!Array.isArray(value) && depth < 3) leafPaths(value, path, depth + 1, out);
+        if (depth < 5) leafPaths(value, path, depth + 1, out);
       } else {
         if (!out.has(path)) out.set(path, { count: 0, sample: value });
         out.get(path).count++;
@@ -317,22 +341,32 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     return out;
   };
 
+  const fitsRule = (rule, path, { sample, values }) => {
+    const words = pathWords(path);
+    if (rule.last && !rule.last.test(lastKey(path))) return false;
+    if (rule.words && !words.some(word => rule.words.test(word))) return false;
+    if (rule.notWords && words.some(word => rule.notWords.test(word))) return false;
+    if (rule.noArrays && path.includes('[')) return false;
+    if (rule.string && typeof sample !== 'string') return false;
+    if (rule.numeric && typeof sample !== 'number' && !/\d/.test(String(sample))) return false;
+    if (rule.name && (!/\p{L}/u.test(sample) || /^(\/|https?:)/i.test(sample))) return false;
+    return !rule.distinct || new Set(values).size === values.length;
+  };
+
   const jsonFields = objects => {
     const paths = new Map();
     for (const object of objects) {
       for (const [path, { sample }] of leafPaths(object, '', 0, new Map())) {
-        if (!paths.has(path)) paths.set(path, { count: 0, sample });
+        if (!paths.has(path)) paths.set(path, { count: 0, sample, values: [] });
         paths.get(path).count++;
+        paths.get(path).values.push(String(sample));
       }
     }
 
     const fields = {};
     for (const [field, rule] of Object.entries(JSON_FIELDS)) {
       const candidates = Array.from(paths.entries())
-        .filter(([path, { sample }]) =>
-          rule.re.test(path) &&
-          (!rule.string || typeof sample === 'string') &&
-          (!rule.numeric || typeof sample === 'number' || /\d/.test(String(sample))))
+        .filter(([path, info]) => fitsRule(rule, path, info))
         .sort(([pathA, a], [pathB, b]) =>
           b.count - a.count ||
           (typeof b.sample === 'number') - (typeof a.sample === 'number') ||
@@ -370,7 +404,7 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
           value.forEach((item, i) => walk(item, `${path}[${i}]`, depth + 1));
         } else {
           for (const [key, item] of Object.entries(value)) {
-            if (/^[\w$-]+$/.test(key)) walk(item, path ? `${path}.${key}` : key, depth + 1);
+            if (isPathKey(key)) walk(item, path ? `${path}.${key}` : key, depth + 1);
           }
         }
       };
@@ -516,7 +550,7 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
       if (typeof node === 'object') {
         for (const [key, child] of Object.entries(node)) {
           if (Array.isArray(node)) walk(child, `${path}[${key}]`, depth + 1);
-          else if (/^[\w$-]+$/.test(key)) walk(child, path ? `${path}.${key}` : key, depth + 1);
+          else if (isPathKey(key)) walk(child, path ? `${path}.${key}` : key, depth + 1);
         }
       } else if (path && String(node).toLowerCase().includes(value.toLowerCase())) {
         const match = matchFor(String(node), value);
