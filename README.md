@@ -79,7 +79,9 @@ listing that passes your filters is sent to your phone.
 
 ## How it works
 
-For every enabled search, in random order and with a pause between portals:
+For every enabled search, in random order and with a short pause between portals (a few
+seconds: each portal has its own browser and sees nothing of the others; set
+`timing.pauseBetweenSitesMs` in `user/config.json` to change it):
 
 1. launches a browser with the portal's own profile (`browser-profile/<site id>/`: cookies and
    history are kept between runs but never shared with other portals), closed once the portal

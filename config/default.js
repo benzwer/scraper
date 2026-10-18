@@ -24,7 +24,7 @@ module.exports = {
     readyTimeout: 10000,
     readingPauseMs: [600, 2200],          // "reading" pause between scroll steps
     pauseBeforeNextPageMs: [4000, 9000],
-    pauseBetweenSitesMs: [20000, 45000],
+    pauseBetweenSitesMs: [3000, 8000],    // short: each portal has its own browser and profile
     maxScrollTimeMs: 25000,
     listingsWaitMs: 30000                 // max wait for listings to appear on a page
   },
