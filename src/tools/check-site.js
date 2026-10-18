@@ -10,10 +10,9 @@ const defaults = require('../../config/default');
 const { Site } = require('../sites/Site');
 const { loadSiteDefinition, loadSiteDefinitions, FIELDS } = require('../sites/definitions');
 const { openSavedPage } = require('./saved-page');
+const { usage, handleHelp } = require('./help');
 
-const USAGE =
-  'Usage: npm run check-site -- <site-id | path/to/definition.json> <page.html> ' +
-  '[--base-url <url>] [--show <n>]';
+const USAGE = `${usage('check-site')}\nMore: npm run check-site -- --help`;
 
 function parseArgs(argv) {
   const args = { positional: [], baseUrl: null, show: 5 };
@@ -41,6 +40,7 @@ function findDefinition(target) {
 }
 
 async function main() {
+  if (handleHelp('check-site', process.argv.slice(2))) return;
   const args = parseArgs(process.argv.slice(2));
   const [target, htmlFile] = args.positional;
 

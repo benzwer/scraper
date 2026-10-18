@@ -25,13 +25,12 @@ const { analyzePage, buildDraft, pickDataRequests } = require('../sites/analyze'
 const { validateDefinition, FIELDS } = require('../sites/definitions');
 const { findBlockSignal } = require('../sites/blocking');
 const { openSavedPage } = require('./saved-page');
+const { usage, handleHelp } = require('./help');
 
 chromium.use(StealthPlugin());
 
-const USAGE =
-  'Usage: npm run analyze-page -- <page.html> [--base-url <url>] [--write <definition.json>]\n' +
-  '       npm run analyze-page -- --url "<url>" [--write <definition.json>]\n' +
-  'Put the URL in quotes: characters like & and ; would otherwise cut it.';
+const USAGE = `${usage('analyze-page')}\nPut the URL in quotes: characters like & and ; would otherwise cut it.\n` +
+  'More: npm run analyze-page -- --help';
 
 function parseArgs(argv) {
   const args = { file: null, url: null, baseUrl: null, write: null };
@@ -369,6 +368,7 @@ async function analyzeLive(args) {
 }
 
 async function main() {
+  if (handleHelp('analyze-page', process.argv.slice(2))) return;
   const args = parseArgs(process.argv.slice(2));
   await (args.url ? analyzeLive(args) : analyzeFile(args));
 }

@@ -10,8 +10,14 @@ const { Notifier } = require('./notify/Notifier');
 const { createSites } = require('./sites');
 const { loadSiteDefinitions } = require('./sites/definitions');
 const { createLogger } = require('./utils/logger');
+const { generalHelp } = require('./tools/help');
 
 async function main() {
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log(generalHelp());
+    return;
+  }
+
   const log = createLogger('main');
   const watch = process.argv.includes('--watch');
   const retryBlocked = process.argv.includes('--retry-blocked');

@@ -12,6 +12,7 @@
     "check-site": "node src/tools/check-site.js",
     "analyze-page": "node src/tools/analyze-page.js",
     "clear-today": "node src/tools/clear-today.js",
+    "help": "node src/tools/help.js",
     "test": "node --test"
   },
   "engines": { "node": ">=18" },

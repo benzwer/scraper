@@ -10,8 +10,9 @@ const defaults = require('../../config/default');
 const { loadConfig } = require('../core/config');
 const { ResultStore } = require('../core/ResultStore');
 const { loadSiteDefinitions } = require('../sites/definitions');
+const { usage, handleHelp } = require('./help');
 
-const USAGE = 'Usage: npm run clear-today -- [--site <id or name>] [--yes]';
+const USAGE = `${usage('clear-today')}\nMore: npm run clear-today -- --help`;
 
 function parseArgs(argv) {
   const args = { site: null, yes: false };
@@ -47,6 +48,7 @@ async function confirm(question) {
 }
 
 async function main() {
+  if (handleHelp('clear-today', process.argv.slice(2))) return;
   const args = parseArgs(process.argv.slice(2));
   const { config } = loadConfig(defaults);
 

@@ -475,8 +475,12 @@ sudo systemctl stop rental-scraper             # stop it
 
 ## Commands
 
+`npm run help` prints this list in the terminal; `npm run <command> -- --help` shows the
+options of one command (e.g. `npm run analyze-page -- --help`).
+
 | Command | What it does |
 |---------|--------------|
+| `npm run help` | Lists every command with its options |
 | `npm run setup` | Creates `user/` and `.env` from the examples (never overwrites) |
 | `npm start` | One run; the last portal's browser stays open until you press ENTER |
 | `npm start -- --retry-blocked` | One run that also visits the portals paused after a block |
@@ -504,7 +508,7 @@ src/sites/index.js          pairs the searches with their definitions
 src/human/HumanBehavior.js  mouse, wheel, clicks and pauses
 src/models/listing.js       common listing schema, parsing, filters
 src/notify/Notifier.js      ntfy and Telegram
-src/tools/                  setup, analyze-page, check-site and clear-today commands
+src/tools/                  setup, analyze-page, check-site, clear-today and help commands
 tests/                      unit tests and synthetic pages for the examples
 user/                       YOUR config and site definitions (not versioned)
 tests/private/              YOUR tests and saved pages (not versioned)
