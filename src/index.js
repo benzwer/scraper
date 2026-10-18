@@ -37,7 +37,7 @@ async function main() {
   const wanted = siteArgs(process.argv.slice(2));
 
   const { config, searches } = loadConfig(defaults);
-  setLogDir(config.paths.logDir);
+  setLogDir(config.paths.logDir, { retentionDays: config.logs.retentionDays });
   // A site whose definition is not valid yet is skipped with its search; the others still run.
   const skipped = new Set();
   const definitions = loadSiteDefinitions(path.join(config.paths.userDir, 'sites'), {

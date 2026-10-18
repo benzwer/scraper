@@ -75,7 +75,7 @@ overwrites a file that already exists. Then:
    ```
    `--site` runs a portal even when its search has `"enabled": false`, and works with
    `npm run watch` too. Besides the terminal, the log is saved in `data/logs/<date>.log`, one
-   file per day.
+   file per day; files older than 30 days are deleted (`logs.retentionDays`).
 
 The first run of each portal **only records** the listings that are already online, without
 notifying you (otherwise you would get dozens of messages). From the second run on, every new
@@ -154,6 +154,7 @@ typos.
 | `watch.intervalMinutes` | `[30, 60]` | Random interval between runs in `npm run watch` |
 | `watch.activeHours` | `[7, 22]` | Runs only between these hours |
 | `store.retentionDays` | `90` | Forget listings not seen for this many days. `null` = never |
+| `logs.retentionDays` | `30` | Delete the daily log files (`data/logs/`) older than this many days. `null` = never |
 | `blocking.pauseHours` / `blocking.maxPauseHours` | `6` / `48` | Pause after a portal blocks access; it doubles at each consecutive block, up to the maximum |
 | `browser.locale` / `browser.timezoneId` | `"it-IT"` / `"Europe/Rome"` | Set them to the country of your portals |
 | `timing.*` | see file | Pauses and timeouts, in milliseconds |

@@ -55,6 +55,9 @@ module.exports = {
   // Listings not seen for this many days are removed from data/seen.json (null = keep forever).
   store: { retentionDays: 90 },
 
+  // Daily log files (data/logs/) older than this many days are deleted (null = keep forever).
+  logs: { retentionDays: 30 },
+
   // --watch mode
   watch: {
     intervalMinutes: [30, 60],
