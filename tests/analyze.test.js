@@ -124,3 +124,22 @@ test('cards: the tightest selector, not a layout class shared with the header; l
   assert.equal(report.cards[0].fields.url.selector, 'a');   // a[title="…"] fits only one card
   assert.equal(report.cards[0].fields.url.coverage, 3);
 });
+
+test('locate clickable: buttons and links by text or link, with their selectors', () => {
+  const dom = new JSDOM(fs.readFileSync(fixture('cards-example.html'), 'utf8'), { url: 'https://www.example.com/search' });
+  global.document = dom.window.document;
+  try {
+    const locate = value => analyzePage({ locate: { type: 'clickable', value } });
+
+    const [next] = locate('next');
+    assert.equal(next.tag, 'a');
+    assert.equal(next.href, '/rent?page=2');
+    assert.deepEqual(next.selectors.slice(0, 2), ['.pagination__next', 'a:has-text("Next")']);
+
+    assert.equal(locate('page=2')[0].name, 'Next');               // by a part of the link
+    assert.equal(locate('accept')[0].selectors[0], '#accept-cookies');
+    assert.deepEqual(locate('no such button'), []);
+  } finally {
+    delete global.document;
+  }
+});

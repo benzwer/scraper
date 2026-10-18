@@ -2,7 +2,7 @@
 //
 // Tests a site definition against a saved HTML page, entirely offline: the page's own scripts are
 // disabled and every network request is blocked. Prints what would be extracted. With --fix it
-// then helps filling the fields left empty (see fix-fields.js).
+// then helps filling the fields left empty and the page selectors not found (see fix-fields.js).
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
@@ -107,9 +107,15 @@ async function main() {
     }
 
     if (args.fix) await fixFields(page, definition);
-    else if (FIELDS.some(field => listings.some(listing => listing[field] == null))) {
-      console.log('\nSome fields are empty. To find them in the page, run:');
-      console.log(`  npm run check-site -- ${process.argv.slice(2).join(' ')} --fix`);
+    else {
+      const missing = [
+        FIELDS.some(field => listings.some(listing => listing[field] == null)) && 'some fields are empty',
+        !nextFound && 'the next page is not found'
+      ].filter(Boolean);
+      if (missing.length) {
+        console.log(`\nTo fix what is missing (${missing.join(', ')}), run:`);
+        console.log(`  npm run check-site -- ${process.argv.slice(2).join(' ')} --fix`);
+      }
     }
   } finally {
     await browser.close();

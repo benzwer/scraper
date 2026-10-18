@@ -47,10 +47,14 @@ const COMMANDS = [
     options: [
       ['--base-url <url>', 'address the page is served at, for relative links (default: homeUrl)'],
       ['--show <n>', 'listings to print (default 5)'],
-      ['--fix', 'for each empty field: type a value you see, choose how to read it']
+      ['--fix', 'fill empty fields and missing buttons from what you see on the page']
     ],
-    notes: ['--fix shows the text of a listing where the field is empty, finds the value you type in it and',
-      'proposes selectors or JSON paths, tried on every listing. The choices are saved after confirmation.'],
+    notes: [
+      '--fix shows the text of a listing where a field is empty, finds the value you type in it and',
+      'proposes selectors or JSON paths, tried on every listing. Then, for the next-page button, the',
+      'cookie banner and popups the scraper does not find, it finds the button by the text you type.',
+      'The choices are saved after confirmation.'
+    ],
     example: 'npm run check-site -- my-portal data/debug/analyze_my-portal.example.html --fix'
   },
   {

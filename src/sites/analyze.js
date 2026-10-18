@@ -4,7 +4,8 @@
 // report into a draft site definition.
 
 // With `locate` ({ ...extract, index, value }) it only returns the text of that listing and, when
-// value is given, candidate field specs reading it (used by check-site --fix).
+// value is given, candidate field specs reading it; with { type: "clickable", value } the buttons
+// and links matching value, with their selectors (used by check-site --fix).
 function analyzePage({ saveSearchText, closeName, locate = null }) {
   const SAVE_SEARCH_RE = new RegExp(saveSearchText, 'i');
   const CLOSE_NAME_RE = new RegExp(closeName, 'i');
@@ -615,7 +616,31 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     });
   };
 
-  if (locate) return locate.type === 'json' ? locateInJson(locate) : locateInCards(locate);
+  // The clickable elements whose text, tooltip or link contains `value` (exact names first), each
+  // with selectors that find it: for selectors.next, selectors.cookie and selectors.popups.
+  const locateClickable = ({ value }) => {
+    const wanted = value.toLowerCase();
+    const found = qsa(document, 'a, button, [role="button"], [role="link"], input[type="button"], input[type="submit"]')
+      .filter(el => [nameOf(el), el.getAttribute('aria-label'), el.getAttribute('title'),
+        el.getAttribute('href'), el.getAttribute('value')].some(v => v && v.toLowerCase().includes(wanted)))
+      .sort((a, b) => (nameOf(b).toLowerCase() === wanted) - (nameOf(a).toLowerCase() === wanted));
+
+    return found.slice(0, 3).map(el => {
+      const tag = el.tagName.toLowerCase();
+      const name = nameOf(el);
+      const selectors = [
+        stableSelector(el),
+        name && name.length <= 40 ? `${tag}:has-text("${quote(name)}")` : null,
+        uniqueSelector(el)
+      ].filter(Boolean);
+      return { tag, name: snippet(name, 40), href: el.getAttribute('href'), selectors: [...new Set(selectors)] };
+    });
+  };
+
+  if (locate) {
+    if (locate.type === 'clickable') return locateClickable(locate);
+    return locate.type === 'json' ? locateInJson(locate) : locateInCards(locate);
+  }
 
   const cookies = cookieElements();
   return {

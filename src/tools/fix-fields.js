@@ -1,11 +1,14 @@
 // check-site --fix: for every field that is empty in some listings, shows the text of one of those
 // listings, asks the value the user sees in it and proposes ways to read it (selector, attribute,
 // regex or JSON path). Each proposal is tried with the scraper's own extractor on the whole page,
-// so its coverage is what the scraper will get. The chosen ones are saved after confirmation.
+// so its coverage is what the scraper will get. Then, for the next-page button, the cookie banner
+// and popups the scraper does not find, it asks the text of the button and proposes selectors.
+// The chosen ones are saved after confirmation.
 const fs = require('node:fs');
 
 const { analyzePage, buildDraft } = require('../sites/analyze');
-const { SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE } = require('../sites/Site');
+const defaults = require('../../config/default');
+const { Site, SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE } = require('../sites/Site');
 const { extractListings } = require('../sites/extract');
 const { validateDefinition, FIELDS } = require('../sites/definitions');
 const { normalizeListing } = require('../models/listing');
@@ -211,23 +214,14 @@ async function checkListings(page, rawDefinition, file) {
   return { name: 'extract', summary: `replaced: ${found} listings instead of ${listings.length - others}` };
 }
 
-async function fixFields(page, definition) {
-  if (definition.extract.type === 'script') {
-    console.log('\n--fix works with css and json definitions: with "script" the fields are read by your script.');
-    return;
-  }
-  if (!process.stdin.isTTY) throw new Error('--fix asks questions: run it in a terminal.');
-
-  const { file } = definition;
-  const original = fs.readFileSync(file, 'utf8');
-  const rawDefinition = JSON.parse(original);
+// The fields part of --fix. Returns "stop" when the user stopped the questions.
+async function fixAllFields(page, rawDefinition, file, changes) {
   // Reads the current extract block, which checkListings may replace.
   const locate = (index, value) => {
     const { type, item, script, items } = rawDefinition.extract;
     return page.evaluate(analyzePage, { locate: { type, item, script, items, index, value } });
   };
 
-  const changes = [];
   const replaced = await checkListings(page, rawDefinition, file);
   if (replaced) changes.push(replaced);
 
@@ -242,7 +236,7 @@ async function fixFields(page, definition) {
   for (const field of todo) {
     const before = await fieldValues(page, rawDefinition, file, field);
     const result = await fixField(page, rawDefinition, file, field, locate);
-    if (result === 'stop') break;
+    if (result === 'stop') return 'stop';
     if (!result) continue;
 
     const count = list => list.filter(value => value != null).length;
@@ -253,6 +247,135 @@ async function fixFields(page, definition) {
     });
     rawDefinition.extract.fields[field] = result.spec;
   }
+  return null;
+}
+
+// ------------------------------------------------------------------
+// Page selectors: next page, cookie banner, popups
+// ------------------------------------------------------------------
+
+const PAGE_SELECTORS = {
+  next: {
+    title: 'Next page',
+    look: 'the button or link that opens the next page of results',
+    example: 'Next, Successiva, ›'
+  },
+  cookie: {
+    title: 'Cookie banner',
+    look: 'the button that accepts the cookies',
+    example: 'Accetta tutto, Accept all'
+  },
+  popups: {
+    title: 'Popup',
+    look: 'the button that closes it',
+    example: '×, Chiudi, No grazie'
+  }
+};
+
+// Paths with :nth-of-type break when the page layout changes a little.
+const isPositionalSelector = selector => /:nth-of-type/.test(selector);
+
+// The selectors finding the buttons or links that match `value`, checked with the same Playwright
+// locators the scraper uses: the ones matching a single element first, positional ones last.
+async function pageSelectorProposals(page, value) {
+  const elements = await page.evaluate(analyzePage, { locate: { type: 'clickable', value } });
+  const proposals = [];
+  for (const element of elements) {
+    for (const selector of element.selectors) {
+      if (proposals.some(proposal => proposal.selector === selector)) continue;
+      const count = await page.locator(selector).count().catch(() => 0);
+      if (count) proposals.push({ selector, count, element });
+    }
+  }
+  return proposals
+    .sort((a, b) => (a.count !== 1) - (b.count !== 1) ||
+      isPositionalSelector(a.selector) - isPositionalSelector(b.selector))
+    .slice(0, MAX_PROPOSALS);
+}
+
+// Asks the text of a button or link and the selector to use. Returns it, null to skip, or "stop".
+async function askPageSelector(page, kind) {
+  const { look, example } = PAGE_SELECTORS[kind];
+  console.log(`Find ${look} on the page. Type its text, its tooltip or a part of its link (e.g. ${example}).`);
+
+  for (;;) {
+    const value = await ask(`${kind} (ENTER to skip, "q" to stop): `);
+    if (!value) return null;
+    if (value.toLowerCase() === 'q') return 'stop';
+
+    const proposals = await pageSelectorProposals(page, value);
+    if (!proposals.length) {
+      console.log(`  No button or link with "${value}" in its text, tooltip or link on this page.`);
+      continue;
+    }
+
+    proposals.forEach(({ selector, count, element }, i) => {
+      const target = `<${element.tag}> "${element.name}"${element.href ? ` -> ${element.href}` : ''}`;
+      console.log(`  ${i + 1}. ${selector}`);
+      console.log(`     ${count === 1 ? 'finds' : `finds ${count} elements, the first is`} ${target}`);
+      if (isPositionalSelector(selector)) console.log('     by position: it may break when the page changes a little');
+    });
+    const choice = await ask(`Choose [1-${proposals.length}], or ENTER to skip: `);
+    const chosen = proposals[Number(choice) - 1];
+    if (chosen) return chosen.selector;
+    if (!choice) return null;
+    console.log('  not a valid choice');
+  }
+}
+
+// selectors.next and selectors.popups are lists: the new selector is added to them.
+function setPageSelector(rawDefinition, kind, selector) {
+  const selectors = rawDefinition.selectors ?? (rawDefinition.selectors = {});
+  const was = selectors[kind];
+  selectors[kind] = kind === 'cookie' ? selector : [...new Set([].concat(was ?? [], selector))];
+  return { name: kind, summary: JSON.stringify(selectors[kind]), was };
+}
+
+async function fixPageSelectors(page, rawDefinition, file, changes) {
+  const definition = validateDefinition(rawDefinition, { file });
+  const site = new Site(definition, { url: page.url() }, { config: defaults, notifier: null });
+  const todo = [];
+
+  if ((await site.nextLocator(page).count()) === 0) todo.push(['next', 'not found (fine if the results fit in one page)']);
+
+  const { cookie } = definition.selectors;
+  if (!cookie || (await page.locator(cookie).count().catch(() => 0)) === 0) {
+    todo.push(['cookie', `${cookie ? `"${cookie}" not found` : 'no selector'} (saved pages often miss the banner)`]);
+  }
+
+  // Popups the scraper would not close: neither a "save search" dialog nor in selectors.popups.
+  if ((await site.popupCloseLocator(page).count()) === 0) {
+    const report = await page.evaluate(analyzePage, {
+      saveSearchText: SAVE_SEARCH_TEXT_RE.source,
+      closeName: CLOSE_NAME_RE.source
+    });
+    const popup = report.popups.find(item => !item.isCookieBanner);
+    if (popup) todo.push(['popups', `"${popup.text}" is not closed by the scraper`]);
+  }
+
+  for (const [kind, status] of todo) {
+    console.log(`\n== ${PAGE_SELECTORS[kind].title}: ${status} ==`);
+    const selector = await askPageSelector(page, kind);
+    if (selector === 'stop') return;
+    if (selector) changes.push(setPageSelector(rawDefinition, kind, selector));
+  }
+}
+
+async function fixFields(page, definition) {
+  if (!process.stdin.isTTY) throw new Error('--fix asks questions: run it in a terminal.');
+
+  const { file } = definition;
+  const original = fs.readFileSync(file, 'utf8');
+  const rawDefinition = JSON.parse(original);
+  const changes = [];
+
+  let stopped = null;
+  if (definition.extract.type === 'script') {
+    console.log('\nWith "extract.type": "script" the fields are read by your script: only the page selectors are checked.');
+  } else {
+    stopped = await fixAllFields(page, rawDefinition, file, changes);
+  }
+  if (!stopped) await fixPageSelectors(page, rawDefinition, file, changes);
 
   if (!changes.length) {
     console.log('\nNo changes.');
@@ -272,4 +395,4 @@ async function fixFields(page, definition) {
   console.log('Saved. Run check-site again to see the result.');
 }
 
-module.exports = { fixFields, compactSpec, rankCandidates };
+module.exports = { fixFields, compactSpec, rankCandidates, pageSelectorProposals };

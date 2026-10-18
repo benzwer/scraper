@@ -385,7 +385,14 @@ use `require` or variables defined outside the function. See
    they read another row where a listing lacks one. Only proposals reading exactly the value
    you typed are shown. At the end the changes are listed and saved to the definition file
    after confirmation. A value missing from the listing usually means it is only on the detail
-   page: leave that field empty. Works with `css` and `json` definitions.
+   page: leave that field empty. The fields part works with `css` and `json` definitions.
+
+   Then come the **page selectors** the scraper does not find: the next-page button, the cookie
+   banner (saved pages often miss it) and popups it would not close. Type the text of the
+   button, its tooltip or a part of its link (e.g. `Successiva`, `›`, `Accetta tutto`): it
+   proposes selectors, checked on the page with the same locators the scraper uses, those that
+   find a single element first. The choice goes to `selectors.next`, `selectors.cookie` or
+   `selectors.popups`.
 5. **Add the search** to `user/config.json` (if `analyze-page` did not add it) and run
    `npm start` once, watching the browser.
 6. **Optional: a regression test.** Put the saved page and a test in `tests/private/` (ignored by
