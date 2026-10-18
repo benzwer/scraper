@@ -32,8 +32,11 @@ function findDefinition(target) {
   if (target.endsWith('.json')) return loadSiteDefinition(path.resolve(target));
 
   const sitesDir = path.join(defaults.paths.userDir, 'sites');
-  const definition = loadSiteDefinitions(sitesDir).find(item => item.id === target);
-  if (!definition) throw new Error(`No site with id "${target}" in ${sitesDir}`);
+  // Other invalid definitions do not matter here; the target's own error is reported.
+  const invalid = new Map();
+  const definition = loadSiteDefinitions(sitesDir, { onInvalid: (error, id) => invalid.set(id, error) })
+    .find(item => item.id === target);
+  if (!definition) throw invalid.get(target) || new Error(`No site with id "${target}" in ${sitesDir}`);
   return definition;
 }
 

@@ -163,7 +163,8 @@ Fill in at least one channel. With none, notifications are only printed in the t
 
 A site definition tells the scraper how to read one portal. Every `*.json` file in
 `user/sites/` is loaded and validated at startup; any mistake is reported with the file name
-and the exact key.
+and the exact key. A site whose definition is not valid (for example a draft not finished yet)
+is skipped together with its search, and the other sites run as usual.
 
 Three examples, each matching a test page in `tests/fixtures/`:
 

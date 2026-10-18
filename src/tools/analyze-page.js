@@ -255,8 +255,7 @@ async function finishDraft({ definition, notes }, args, { pageFile, searchUrl = 
 
   const defaultFile = path.relative(process.cwd(), path.join(sitesDir, `${definition.id}.json`));
   if (!valid) {
-    console.log(`Warning: the draft is not valid yet. Saved in ${path.relative(process.cwd(), sitesDir)}, it stops`);
-    console.log('npm start and check-site until you complete it.');
+    console.log('Note: the draft is not valid yet: until you complete it, npm start skips this site.');
   }
   const savedFile = args.write ? writeDraft(args.write, json) : await askToSave(json, defaultFile);
   printNextSteps(definition, savedFile, defaultFile, { pageFile, searchUrl });

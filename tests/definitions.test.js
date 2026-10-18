@@ -95,3 +95,17 @@ test('loadSiteDefinitions reports invalid JSON with the file name', () => {
   fs.writeFileSync(path.join(dir, 'broken.json'), '{ "id": ');
   assert.throws(() => loadSiteDefinitions(dir), /broken\.json: cannot read the definition/);
 });
+
+test('loadSiteDefinitions with onInvalid skips invalid definitions and keeps the others', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sites-'));
+  fs.writeFileSync(path.join(dir, 'good.json'), JSON.stringify(cssSite()));
+  fs.writeFileSync(path.join(dir, 'draft.json'), JSON.stringify({ id: 'draft-site', name: 'Draft' }));
+  fs.writeFileSync(path.join(dir, 'broken.json'), '{ "id": ');
+
+  const skipped = [];
+  const definitions = loadSiteDefinitions(dir, { onInvalid: (error, id) => skipped.push([id, error.message]) });
+
+  assert.deepEqual(definitions.map(definition => definition.id), ['my-site']);
+  assert.deepEqual(skipped.map(([id]) => id), ['broken', 'draft-site']);   // file name when unreadable
+  assert.match(skipped[1][1], /draft\.json:\n {2}- extract/);
+});

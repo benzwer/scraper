@@ -17,7 +17,15 @@ async function main() {
   const retryBlocked = process.argv.includes('--retry-blocked');
 
   const { config, searches } = loadConfig(defaults);
-  const definitions = loadSiteDefinitions(path.join(config.paths.userDir, 'sites'));
+  // A site whose definition is not valid yet is skipped with its search; the others still run.
+  const skipped = new Set();
+  const definitions = loadSiteDefinitions(path.join(config.paths.userDir, 'sites'), {
+    onInvalid: (error, id) => {
+      skipped.add(id);
+      log.warn(`Site "${id}" skipped: its definition is not valid.\n${error.message}`);
+    }
+  });
+  const runnable = searches.filter(search => !skipped.has(search.site));
 
   const store = new ResultStore(config.paths.dataDir, config.store);
   await store.load();
@@ -25,8 +33,12 @@ async function main() {
   const notifier = new Notifier();
   log.info(`Notifications: ${notifier.describeChannels()}`);
 
-  const sites = createSites(searches, definitions, { config, notifier });
-  if (sites.length === 0) throw new Error('No enabled searches in user/config.json');
+  const sites = createSites(runnable, definitions, { config, notifier });
+  if (sites.length === 0) {
+    throw new Error(skipped.size
+      ? 'No site to run: the enabled searches use only sites whose definition is not valid (see above)'
+      : 'No enabled searches in user/config.json');
+  }
   log.info(`Active sites: ${sites.map(site => site.name).join(', ')}`);
 
   const scraper = new Scraper({ config, sites, store, notifier });

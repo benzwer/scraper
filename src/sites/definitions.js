@@ -205,15 +205,34 @@ function loadSiteDefinition(file) {
   return validateDefinition(raw, { file });
 }
 
-// Loads every *.json in the directory. Ids must be unique.
-function loadSiteDefinitions(dir) {
+// The id a definition declares, or its file name when the file cannot be read as JSON.
+function declaredId(file) {
+  try {
+    const { id } = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (isText(id)) return id;
+  } catch {
+    // unreadable: fall back to the file name
+  }
+  return path.basename(file, '.json');
+}
+
+// Loads every *.json in the directory. Ids must be unique. Without onInvalid the first invalid
+// definition throws; with onInvalid(error, id) it is skipped and reported, so one unfinished
+// definition does not stop the others.
+function loadSiteDefinitions(dir, { onInvalid = null } = {}) {
   if (!fs.existsSync(dir)) return [];
 
-  const definitions = fs
-    .readdirSync(dir)
-    .filter(name => name.endsWith('.json'))
-    .sort()
-    .map(name => loadSiteDefinition(path.join(dir, name)));
+  const definitions = [];
+  const files = fs.readdirSync(dir).filter(name => name.endsWith('.json')).sort();
+  for (const name of files) {
+    const file = path.join(dir, name);
+    try {
+      definitions.push(loadSiteDefinition(file));
+    } catch (error) {
+      if (!onInvalid) throw error;
+      onInvalid(error, declaredId(file));
+    }
+  }
 
   const byId = new Map();
   for (const definition of definitions) {
