@@ -102,3 +102,32 @@ test('--site: the searches of the sites asked for, by id or name, disabled ones 
   assert.throws(() => searchesForSites(searches, definitions, ['draft'], { invalid: new Set(['draft']) }), /definition is not valid/);
   assert.throws(() => searchesForSites([], definitions, ['cards']), /no search for "cards"/);
 });
+
+// A close button for clickPopupClose, at `box` in a 1280x800 window.
+function fakeCloseButton(box) {
+  const calls = [];
+  const button = {
+    isVisible: async () => true,
+    boundingBox: async () => box,
+    page: () => ({ evaluate: async () => ({ width: 1280, height: 800 }) }),
+    waitFor: async options => calls.push(['waitFor', options.state])
+  };
+  const human = { click: async () => calls.push(['click']) };
+  return { button, human, calls };
+}
+
+test('popups: a close button outside the window (a closed side menu) is left alone', async () => {
+  const site = makeSite();
+  const { button, human, calls } = fakeCloseButton({ x: 1487, y: 10, width: 48, height: 48 });
+
+  assert.equal(await site.clickPopupClose(button, human), false);
+  assert.deepEqual(calls, []);
+});
+
+test('popups: a close button on screen is clicked, then the popup is given time to go', async () => {
+  const site = makeSite();
+  const { button, human, calls } = fakeCloseButton({ x: 900, y: 120, width: 32, height: 32 });
+
+  assert.equal(await site.clickPopupClose(button, human), true);
+  assert.deepEqual(calls, [['click'], ['waitFor', 'hidden']]);
+});

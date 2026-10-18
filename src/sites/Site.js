@@ -33,6 +33,18 @@ const NEXT_NAME_RE = /^(pagina )?(successiva|avanti|next)$|^[›»→]$/i;
 const SAVE_SEARCH_TEXT_RE = /salva.{0,30}ricerc|ricerc.{0,30}salvat|save.{0,30}search|avvis|alert/i;
 const CLOSE_NAME_RE =
   /^(chiudi|close)\b|^(annulla|cancel|no,? grazie|no,? thanks|non ora|not now|più tardi|later|x|×|✕|✖)$/i;
+const POPUP_CLOSE_WAIT_MS = 5000;
+
+// Playwright calls "visible" also an element parked outside the window, like the close button of
+// a closed side menu (a dialog that can mention "saved searches"): it cannot be clicked.
+async function isOnScreen(locator) {
+  // isVisible does not wait; boundingBox would wait for a missing element.
+  if (!(await locator.isVisible().catch(() => false))) return false;
+  const box = await locator.boundingBox({ timeout: 1000 }).catch(() => null);
+  if (!box || !box.width || !box.height) return false;
+  const { width, height } = await locator.page().evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  return box.x < width && box.y < height && box.x + box.width > 0 && box.y + box.height > 0;
+}
 
 // One portal + one search. Everything portal-specific comes from the site definition
 // (a validated JSON file, see definitions.js); the flow itself is the same for every portal.
@@ -108,11 +120,10 @@ class Site {
       }
 
       // Same for a "save this search" popup: the mouse moves to its close button and clicks it.
-      await page.addLocatorHandler(this.popupCloseLocator(page), async button => {
-        this.log.info('Closing a "save search" popup...');
-        await delay(700, 1800);
-        await human.click(button);
-      });
+      // noWaitAfter: Playwright would otherwise wait, with no end, for a popup that does not go
+      // away (or that was not on screen and was not clicked); clickPopupClose waits a bit itself.
+      await page.addLocatorHandler(this.popupCloseLocator(page),
+        button => this.clickPopupClose(button, human), { noWaitAfter: true });
 
       // Start from the home page like a person would, then go to the search.
       if (homeUrl) {
@@ -237,13 +248,19 @@ class Site {
   // The locator handler only fires before Playwright actions (e.g. clicking "next"): this closes
   // the popup as soon as the results are on screen, before scrolling through them.
   async closeSaveSearchPopup(page, human) {
-    const close = this.popupCloseLocator(page);
-    if (!(await close.isVisible().catch(() => false))) return;
+    if (await this.clickPopupClose(this.popupCloseLocator(page), human)) await delay(600, 1500);
+  }
+
+  // Clicks a popup's close button if it is on screen, then waits a little for the popup to go.
+  // Returns true when it clicked.
+  async clickPopupClose(button, human) {
+    if (!(await isOnScreen(button))) return false;
 
     this.log.info('Closing a "save search" popup...');
-    await delay(800, 2000);
-    await human.click(close).catch(() => {});
-    await delay(600, 1500);
+    await delay(700, 1800);
+    await human.click(button).catch(() => {});
+    await button.waitFor({ state: 'hidden', timeout: POPUP_CLOSE_WAIT_MS }).catch(() => {});
+    return true;
   }
 
   // The site's own selectors.next when it has them: merged with the built-in ones, the first

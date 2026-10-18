@@ -215,7 +215,7 @@ CSS plus extras such as `:has-text("Next")` and `:text-is("Next")`.
 | `cookie` | none | The cookie banner's *accept* button |
 | `next` | `[]` | Selectors for the *next page* button. When empty, common ones are tried (`rel="next"`, links named "Next", "Successiva", "Avanti", `›`, labels like "Pagina successiva"); when set, only these are used |
 | `blocked` | `[]` | Extra selectors of the portal's own "access denied" page. Common captchas are already recognised |
-| `popups` | `[]` | Extra selectors for the *close* button of a "save this search" popup. Popups marked as dialogs that mention saving the search or alerts are already closed (never saved) by their "Close", "×", "No thanks", "Non ora", … button |
+| `popups` | `[]` | Extra selectors for the *close* button of a "save this search" popup. Popups marked as dialogs that mention saving the search or alerts are already closed (never saved) by their "Close", "×", "No thanks", "Non ora", … button, when it is on screen (a side menu parked outside the window is left alone) |
 
 ### Fields
 
