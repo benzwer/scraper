@@ -12,7 +12,7 @@ const { Site } = require('../sites/Site');
 const { loadSiteDefinition, loadSiteDefinitions, FIELDS } = require('../sites/definitions');
 const { openSavedPage } = require('./saved-page');
 const { usage, handleHelp } = require('./help');
-const { fixFields } = require('./fix-fields');
+const { fixFields, describeLocated } = require('./fix-fields');
 
 const USAGE = `${usage('check-site')}\nMore: npm run check-site -- --help`;
 
@@ -68,7 +68,9 @@ async function main() {
     const popupFound = (await site.popupCloseLocator(page).count()) > 0;
 
     console.log(`Ready:     ${ready} -> ${readyCount ? `found (${readyCount})` : 'NOT FOUND'}`);
-    console.log(`Next page: ${nextFound ? 'found' : 'not found (fine if the page has no pagination)'}`);
+    console.log(`Next page: ${nextFound
+      ? `found ${await describeLocated(site.nextLocator(page))}`
+      : 'not found (fine if the page has no pagination)'}`);
     if (popupFound) console.log('Popup:     "save search" popup close button found');
     if (cookie) console.log(`Cookie:    ${cookie} -> ${cookieCount ? 'found' : 'not found (often missing in saved pages)'}`);
 

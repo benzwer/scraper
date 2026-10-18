@@ -208,7 +208,7 @@ CSS plus extras such as `:has-text("Next")` and `:text-is("Next")`.
 | `ready` | `extract.item` (css) or `extract.script` (json); **required** for `script` | Element meaning "the listings are on the page" |
 | `items` | `extract.item` (css) | A listing, hovered now and then to look human |
 | `cookie` | none | The cookie banner's *accept* button |
-| `next` | `[]` | Extra selectors for the *next page* button. Common ones (`rel="next"`, "Next", "Successiva", `›`, …) are already tried |
+| `next` | `[]` | Selectors for the *next page* button. When empty, common ones are tried (`rel="next"`, links named "Next", "Successiva", "Avanti", `›`, labels like "Pagina successiva"); when set, only these are used |
 | `blocked` | `[]` | Extra selectors of the portal's own "access denied" page. Common captchas are already recognised |
 | `popups` | `[]` | Extra selectors for the *close* button of a "save this search" popup. Popups marked as dialogs that mention saving the search or alerts are already closed (never saved) by their "Close", "×", "No thanks", "Non ora", … button |
 
@@ -387,12 +387,14 @@ use `require` or variables defined outside the function. See
    after confirmation. A value missing from the listing usually means it is only on the detail
    page: leave that field empty. The fields part works with `css` and `json` definitions.
 
-   Then come the **page selectors** the scraper does not find: the next-page button, the cookie
-   banner (saved pages often miss it) and popups it would not close. Type the text of the
-   button, its tooltip or a part of its link (e.g. `Successiva`, `›`, `Accetta tutto`): it
-   proposes selectors, checked on the page with the same locators the scraper uses, those that
-   find a single element first. The choice goes to `selectors.next`, `selectors.cookie` or
-   `selectors.popups`.
+   Then come the **page selectors**. The next-page button it finds is shown (e.g.
+   `<a> "Avanti" -> /rent?page=2`) for you to confirm: a lookalike such as a photo carousel's
+   "next image" arrow would make the scraper click the wrong thing. It also asks about the
+   cookie banner when it is not found (saved pages often miss it) and popups it would not
+   close. Type the text of the button, its tooltip or a part of its link (e.g. `Successiva`,
+   `›`, `Accetta tutto`): it proposes selectors, checked on the page with the same locators
+   the scraper uses, those that find a single element first. The choice goes to
+   `selectors.next`, `selectors.cookie` or `selectors.popups`.
 5. **Add the search** to `user/config.json` (if `analyze-page` did not add it) and run
    `npm start` once, watching the browser.
 6. **Optional: a regression test.** Put the saved page and a test in `tests/private/` (ignored by

@@ -71,3 +71,17 @@ test('createSites rejects unknown sites and duplicate searches', () => {
     /more than one enabled search/
   );
 });
+
+test('built-in next-page selectors skip a photo carousel\'s "next image" buttons', () => {
+  const { JSDOM } = require('jsdom');
+  const { DEFAULT_NEXT_CSS } = require('../src/sites/Site');
+  const { document } = new JSDOM(`
+    <button aria-label="Immagine successiva">›</button>
+    <button aria-label="Next image">›</button>
+    <a id="it" aria-label="Vai alla pagina successiva" href="?page=2">›</a>
+    <a id="en" aria-label="Next page" href="?page=2">›</a>
+    <a id="plain" title="Next" href="?page=2">›</a>`).window;
+
+  const found = [...document.querySelectorAll(DEFAULT_NEXT_CSS.join(', '))].map(el => el.id);
+  assert.deepEqual(found, ['it', 'en', 'plain']);
+});

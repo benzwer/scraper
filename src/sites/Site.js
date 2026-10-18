@@ -8,16 +8,21 @@ const { normalizeListing } = require('../models/listing');
 const { extractListings } = require('./extract');
 const { blockedStatus, findBlockSignal } = require('./blocking');
 
-// Common "next page" controls, in English and Italian. A site definition can add its own
-// through selectors.next.
+// Common "next page" controls, in English and Italian, used when the site definition has no
+// selectors.next. A label must name the page or be just "next": a photo carousel in every card
+// has buttons labelled "Immagine successiva" / "Next image".
 const DEFAULT_NEXT_CSS = [
   'a[rel="next"]',
-  'a[aria-label*="successiva" i]',
-  'button[aria-label*="successiva" i]',
-  'a[aria-label*="next" i]',
-  'button[aria-label*="next" i]',
-  'a[title*="successiva" i]',
-  'a[title*="next" i]'
+  ...['a', 'button'].flatMap(tag => [
+    `${tag}[aria-label*="pagina successiva" i]`,
+    `${tag}[aria-label*="next page" i]`,
+    `${tag}[aria-label="successiva" i]`,
+    `${tag}[aria-label="next" i]`
+  ]),
+  'a[title*="pagina successiva" i]',
+  'a[title*="next page" i]',
+  'a[title="successiva" i]',
+  'a[title="next" i]'
 ];
 
 const NEXT_NAME_RE = /^(pagina )?(successiva|avanti|next)$|^[›»→]$/i;
@@ -241,11 +246,13 @@ class Site {
     await delay(600, 1500);
   }
 
+  // The site's own selectors.next when it has them: merged with the built-in ones, the first
+  // match in page order would win, and that can be a lookalike earlier in the page.
   nextLocator(page) {
-    const css = [...DEFAULT_NEXT_CSS, ...this.selectors.next].join(', ');
+    if (this.selectors.next.length) return page.locator(this.selectors.next.join(', ')).first();
 
     return page
-      .locator(css)
+      .locator(DEFAULT_NEXT_CSS.join(', '))
       .or(page.getByRole('link', { name: NEXT_NAME_RE }))
       .first();
   }
@@ -336,4 +343,4 @@ class Site {
   }
 }
 
-module.exports = { Site, SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE };
+module.exports = { Site, SAVE_SEARCH_TEXT_RE, CLOSE_NAME_RE, DEFAULT_NEXT_CSS };

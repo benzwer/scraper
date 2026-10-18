@@ -272,6 +272,14 @@ const PAGE_SELECTORS = {
   }
 };
 
+// '<a> "Next" -> /rent?page=2': the element a locator finds, to tell a lookalike (a photo
+// carousel's "next image" button) from the right one.
+const describeLocated = locator => locator.evaluate(el => {
+  const name = (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  const href = el.getAttribute('href');
+  return `<${el.tagName.toLowerCase()}> "${name}"${href ? ` -> ${href}` : ''}`;
+}).catch(() => '(not readable)');
+
 // Paths with :nth-of-type break when the page layout changes a little.
 const isPositionalSelector = selector => /:nth-of-type/.test(selector);
 
@@ -323,11 +331,12 @@ async function askPageSelector(page, kind) {
   }
 }
 
-// selectors.next and selectors.popups are lists: the new selector is added to them.
+// A page has one next-page button and one cookie button, so they are replaced; selectors.popups
+// is a list of close buttons, so the new one is added.
 function setPageSelector(rawDefinition, kind, selector) {
   const selectors = rawDefinition.selectors ?? (rawDefinition.selectors = {});
   const was = selectors[kind];
-  selectors[kind] = kind === 'cookie' ? selector : [...new Set([].concat(was ?? [], selector))];
+  selectors[kind] = { next: [selector], cookie: selector, popups: [...new Set([].concat(was ?? [], selector))] }[kind];
   return { name: kind, summary: JSON.stringify(selectors[kind]), was };
 }
 
@@ -336,7 +345,16 @@ async function fixPageSelectors(page, rawDefinition, file, changes) {
   const site = new Site(definition, { url: page.url() }, { config: defaults, notifier: null });
   const todo = [];
 
-  if ((await site.nextLocator(page).count()) === 0) todo.push(['next', 'not found (fine if the results fit in one page)']);
+  // The next-page button: when one is found, the user confirms it is the right one.
+  const next = site.nextLocator(page);
+  if ((await next.count()) === 0) {
+    todo.push(['next', 'not found (fine if the results fit in one page)']);
+  } else {
+    console.log(`\n== Next page: found ${await describeLocated(next)} ==`);
+    const answer = await ask('Is it the button or link to the next page of results? [Y/n/q] ');
+    if (answer.toLowerCase() === 'q') return;
+    if (/^no?$/i.test(answer)) todo.push(['next', 'the one found is not right']);
+  }
 
   const { cookie } = definition.selectors;
   if (!cookie || (await page.locator(cookie).count().catch(() => 0)) === 0) {
@@ -349,7 +367,8 @@ async function fixPageSelectors(page, rawDefinition, file, changes) {
       saveSearchText: SAVE_SEARCH_TEXT_RE.source,
       closeName: CLOSE_NAME_RE.source
     });
-    const popup = report.popups.find(item => !item.isCookieBanner);
+    // A layer without text is a backdrop, not something to close.
+    const popup = report.popups.find(item => !item.isCookieBanner && item.text);
     if (popup) todo.push(['popups', `"${popup.text}" is not closed by the scraper`]);
   }
 
@@ -395,4 +414,4 @@ async function fixFields(page, definition) {
   console.log('Saved. Run check-site again to see the result.');
 }
 
-module.exports = { fixFields, compactSpec, rankCandidates, pageSelectorProposals };
+module.exports = { fixFields, compactSpec, rankCandidates, pageSelectorProposals, describeLocated };
