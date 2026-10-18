@@ -71,7 +71,11 @@ overwrites a file that already exists. Then:
    ```bash
    npm start          # one run; the last browser stays open until you press ENTER
    npm run watch      # keeps running: one run every 30-60 minutes, 07:00-22:00
+   npm start -- --site my-portal   # only one portal (by id or name; repeat --site for more)
    ```
+   `--site` runs a portal even when its search has `"enabled": false`, and works with
+   `npm run watch` too. Besides the terminal, the log is saved in `data/logs/<date>.log`, one
+   file per day.
 
 The first run of each portal **only records** the listings that are already online, without
 notifying you (otherwise you would get dozens of messages). From the second run on, every new
@@ -519,6 +523,7 @@ options of one command (e.g. `npm run analyze-page -- --help`).
 | `npm run setup` | Creates `user/` and `.env` from the examples (never overwrites) |
 | `npm start` | One run; the last portal's browser stays open until you press ENTER |
 | `npm start -- --retry-blocked` | One run that also visits the portals paused after a block |
+| `npm start -- --site <id>` | One run of that portal only (also with `npm run watch -- --site <id>`) |
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
 | `npm run analyze-page -- <page.html> \| --url <url>` | Analyses a results page and drafts a site definition (`--write <file>` to save it) |
 | `npm run check-site -- <id or file> <page.html> [--fix]` | Tests a site definition offline; `--fix` helps filling the empty fields |

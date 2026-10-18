@@ -7,10 +7,24 @@ const { loadConfig } = require('./core/config');
 const { ResultStore } = require('./core/ResultStore');
 const { Scraper } = require('./core/Scraper');
 const { Notifier } = require('./notify/Notifier');
-const { createSites } = require('./sites');
+const { createSites, searchesForSites } = require('./sites');
 const { loadSiteDefinitions } = require('./sites/definitions');
-const { createLogger } = require('./utils/logger');
+const { createLogger, setLogDir } = require('./utils/logger');
 const { generalHelp } = require('./tools/help');
+
+const log = createLogger('main');
+
+// The values of every --site option ("--site a --site b" or "--site a,b").
+function siteArgs(argv) {
+  const values = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== '--site') continue;
+    const value = argv[i + 1];
+    if (!value || value.startsWith('--')) throw new Error('--site: a site id or name is required');
+    values.push(...value.split(',').map(item => item.trim()).filter(Boolean));
+  }
+  return values;
+}
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -18,11 +32,12 @@ async function main() {
     return;
   }
 
-  const log = createLogger('main');
   const watch = process.argv.includes('--watch');
   const retryBlocked = process.argv.includes('--retry-blocked');
+  const wanted = siteArgs(process.argv.slice(2));
 
   const { config, searches } = loadConfig(defaults);
+  setLogDir(config.paths.logDir);
   // A site whose definition is not valid yet is skipped with its search; the others still run.
   const skipped = new Set();
   const definitions = loadSiteDefinitions(path.join(config.paths.userDir, 'sites'), {
@@ -31,7 +46,12 @@ async function main() {
       log.warn(`Site "${id}" skipped: its definition is not valid.\n${error.message}`);
     }
   });
-  const runnable = searches.filter(search => !skipped.has(search.site));
+  let runnable = searches.filter(search => !skipped.has(search.site));
+  if (wanted.length) {
+    const chosen = searchesForSites(searches, definitions, wanted, { invalid: skipped });
+    for (const name of chosen.forced) log.info(`${name}: its search is disabled, run because asked with --site.`);
+    runnable = chosen.searches;
+  }
 
   const store = new ResultStore(config.paths.dataDir, config.store);
   await store.load();
@@ -63,6 +83,6 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error('Fatal error:', error);
+  log.error('Fatal error:', error);
   process.exit(1);
 });

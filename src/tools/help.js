@@ -5,15 +5,22 @@ const COMMANDS = [
   {
     group: 'Running',
     name: 'start',
-    usage: ['npm start [-- --retry-blocked]'],
-    summary: 'One run of every enabled search; the last browser stays open until you press ENTER.',
-    options: [['--retry-blocked', 'also visit the portals paused after a block']]
+    usage: ['npm start [-- --site <id or name>] [--retry-blocked]'],
+    summary: 'One run of every enabled search; the last browser stays open until you press ENTER. ' +
+      'The log is also saved in data/logs/<date>.log.',
+    options: [
+      ['--site <id or name>', 'only this site, even if its search is disabled (repeat it for more)'],
+      ['--retry-blocked', 'also visit the portals paused after a block']
+    ],
+    example: 'npm start -- --site my-portal'
   },
   {
     group: 'Running',
     name: 'watch',
-    usage: ['npm run watch'],
-    summary: 'A run every 30-60 minutes within the active hours (07:00-22:00). Stop with Ctrl+C.'
+    usage: ['npm run watch [-- --site <id or name>]'],
+    summary: 'A run every 30-60 minutes within the active hours (07:00-22:00). Stop with Ctrl+C. ' +
+      'The log is also saved in data/logs/<date>.log.',
+    options: [['--site <id or name>', 'only this site (repeat it for more)']]
   },
   {
     group: 'Site definitions',

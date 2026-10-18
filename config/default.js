@@ -9,6 +9,7 @@ module.exports = {
     root,
     profileDir: path.join(root, 'browser-profile'), // one persistent profile per site (cookies, history)
     dataDir: path.join(root, 'data'),                // seen listings, latest run, debug files
+    logDir: path.join(root, 'data', 'logs'),         // the scraper's log, one file per day
     userDir: path.join(root, 'user')                 // your config.json and site definitions
   },
 

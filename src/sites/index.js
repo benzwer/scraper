@@ -24,4 +24,30 @@ function createSites(searches, definitions, deps) {
     });
 }
 
-module.exports = { createSites };
+// For --site: the searches of the sites asked for by id or name. A disabled search is used too,
+// since the site was asked for by name; "forced" lists those sites. Each site runs once.
+function searchesForSites(searches, definitions, wanted, { invalid = new Set() } = {}) {
+  const chosen = new Map();
+  const forced = [];
+
+  for (const value of wanted) {
+    const definition = definitions.find(item =>
+      item.id === value || item.name.toLowerCase() === value.toLowerCase());
+    if (!definition) {
+      throw new Error(invalid.has(value)
+        ? `--site ${value}: its definition is not valid (see above)`
+        : `--site ${value}: no site with this id or name (sites: ${definitions.map(item => item.id).join(', ') || 'none'})`);
+    }
+    if (chosen.has(definition.id)) continue;
+
+    const ofSite = searches.filter(search => search.site === definition.id);
+    const search = ofSite.find(item => item.enabled !== false) || ofSite[0];
+    if (!search) throw new Error(`--site ${value}: no search for "${definition.id}" in user/config.json`);
+    if (search.enabled === false) forced.push(definition.name);
+    chosen.set(definition.id, { ...search, enabled: true });
+  }
+
+  return { searches: [...chosen.values()], forced };
+}
+
+module.exports = { createSites, searchesForSites };

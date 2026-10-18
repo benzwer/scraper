@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { Site } = require('../src/sites/Site');
-const { createSites } = require('../src/sites');
+const { createSites, searchesForSites } = require('../src/sites');
 const { validateDefinition } = require('../src/sites/definitions');
 
 const config = { timing: { readyTimeout: 10, listingsWaitMs: 50 } };
@@ -84,4 +84,21 @@ test('built-in next-page selectors skip a photo carousel\'s "next image" buttons
 
   const found = [...document.querySelectorAll(DEFAULT_NEXT_CSS.join(', '))].map(el => el.id);
   assert.deepEqual(found, ['it', 'en', 'plain']);
+});
+
+test('--site: the searches of the sites asked for, by id or name, disabled ones too', () => {
+  const searches = [
+    { site: 'cards', url: 'https://a.example/' },
+    { site: 'other', url: 'https://b.example/', enabled: false }
+  ];
+  const definitions = [definition('cards'), definition('other')];
+
+  const chosen = searchesForSites(searches, definitions, ['OTHER', 'cards', 'other']);
+  assert.deepEqual(chosen.searches.map(search => [search.site, search.enabled]), [['other', true], ['cards', true]]);
+  assert.deepEqual(chosen.forced, ['OTHER']);
+  assert.equal(createSites(chosen.searches, definitions, { config }).length, 2);
+
+  assert.throws(() => searchesForSites(searches, definitions, ['nope']), /no site with this id or name \(sites: cards, other\)/);
+  assert.throws(() => searchesForSites(searches, definitions, ['draft'], { invalid: new Set(['draft']) }), /definition is not valid/);
+  assert.throws(() => searchesForSites([], definitions, ['cards']), /no search for "cards"/);
 });
