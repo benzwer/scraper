@@ -1,8 +1,10 @@
-// npm run check-site -- <site-id | definition.json> <page.html> [--base-url <url>] [--show <n>] [--fix]
+// npm run check-site -- <site-id | definition.json> <page.html> [--base-url <url>] [--show <n>] [--fix] [--open]
 //
 // Tests a site definition against a saved HTML page, entirely offline: the page's own scripts are
 // disabled and every network request is blocked. Prints what would be extracted. With --fix it
 // then helps filling the fields left empty and the page selectors not found (see fix-fields.js).
+// With --open the same page is also shown in a visible browser, with its scripts and stylesheets,
+// to look at it while checking; the checks still run on the offline copy.
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
@@ -10,18 +12,20 @@ const { chromium } = require('playwright');
 const defaults = require('../../config/default');
 const { Site } = require('../sites/Site');
 const { loadSiteDefinition, loadSiteDefinitions, FIELDS } = require('../sites/definitions');
-const { openSavedPage } = require('./saved-page');
+const { openSavedPage, showSavedPage } = require('./saved-page');
 const { usage, handleHelp } = require('./help');
 const { fixFields, describeLocated } = require('./fix-fields');
+const { ask } = require('./ask');
 
 const USAGE = `${usage('check-site')}\nMore: npm run check-site -- --help`;
 
 function parseArgs(argv) {
-  const args = { positional: [], baseUrl: null, show: 5, fix: false };
+  const args = { positional: [], baseUrl: null, show: 5, fix: false, open: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--base-url') args.baseUrl = argv[++i];
     else if (argv[i] === '--show') args.show = Number(argv[++i]);
     else if (argv[i] === '--fix') args.fix = true;
+    else if (argv[i] === '--open') args.open = true;
     else args.positional.push(argv[i]);
   }
   if (args.positional.length !== 2 || !Number.isInteger(args.show) || args.show < 0) {
@@ -46,6 +50,9 @@ async function main() {
   if (handleHelp('check-site', process.argv.slice(2))) return;
   const args = parseArgs(process.argv.slice(2));
   const [target, htmlFile] = args.positional;
+  if (args.open && !process.stdin.isTTY) {
+    throw new Error('--open waits for ENTER to close the browser: run it in a terminal.');
+  }
 
   const definition = findDefinition(target);
   const html = fs.readFileSync(path.resolve(htmlFile), 'utf8');
@@ -56,7 +63,9 @@ async function main() {
   console.log(`Page:      ${htmlFile} (served as ${baseUrl})`);
 
   const browser = await chromium.launch();
+  let viewer = null;
   try {
+    if (args.open) viewer = await openViewer(html, baseUrl);
     const page = await openSavedPage(browser, html, baseUrl);
 
     const site = new Site(definition, { url: baseUrl }, { config: defaults, notifier: null });
@@ -121,6 +130,22 @@ async function main() {
     }
   } finally {
     await browser.close();
+    if (viewer) {
+      if (viewer.isConnected()) await ask('\nPress ENTER to close the browser window.');
+      await viewer.close();
+    }
+  }
+}
+
+// The visible window is only an aid: if it cannot open, the check goes on without it.
+async function openViewer(html, baseUrl) {
+  try {
+    const viewer = await showSavedPage(chromium, html, baseUrl);
+    console.log('Browser:   page shown in a visible window, with its scripts and stylesheets');
+    return viewer;
+  } catch (error) {
+    console.log(`Browser:   could not show the page (${error.message.split('\n')[0]})`);
+    return null;
   }
 }
 

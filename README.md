@@ -366,6 +366,12 @@ use `require` or variables defined outside the function. See
    listings to print, `--base-url <url>` to resolve relative links (default: `homeUrl`).
    You can also pass a file path instead of the id: `npm run check-site -- ./draft.json page.html`.
 
+   **Want to look at the page? Add `--open`.** The same saved page is also shown in a visible
+   browser, served at the `--base-url` address with its scripts running and its stylesheets and
+   images loaded from the portal, so it looks as it did (pages that need JavaScript to draw
+   themselves included). It is only for your eyes, handy with `--fix`: the checks still run on
+   the offline copy. Press ENTER at the end to close it.
+
    **Fields left empty? Add `--fix`.** First, if some of the blocks found by `extract.item`
    are not listings (no link and no id: often the menu or the footer, when the selector is a
    generic layout class), it says so and offers the listings and fields `analyze-page` finds
@@ -527,7 +533,7 @@ options of one command (e.g. `npm run analyze-page -- --help`).
 | `npm start -- --site <id>` | One run of that portal only (also with `npm run watch -- --site <id>`) |
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
 | `npm run analyze-page -- <page.html> \| --url <url>` | Analyses a results page and drafts a site definition (`--write <file>` to save it) |
-| `npm run check-site -- <id or file> <page.html> [--fix]` | Tests a site definition offline; `--fix` helps filling the empty fields |
+| `npm run check-site -- <id or file> <page.html> [--fix] [--open]` | Tests a site definition offline; `--fix` helps filling the empty fields, `--open` shows the page in a browser |
 | `npm run clear-today -- [--site <id>] [--yes]` | Forgets the listings first seen today, so the next run notifies them again |
 | `npm test` | Unit tests, no network |
 

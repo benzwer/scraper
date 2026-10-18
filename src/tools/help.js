@@ -49,12 +49,13 @@ const COMMANDS = [
   {
     group: 'Site definitions',
     name: 'check-site',
-    usage: ['npm run check-site -- <id | file.json> <page.html> [--base-url <url>] [--show <n>] [--fix]'],
+    usage: ['npm run check-site -- <id | file> <page.html> [--base-url <url>] [--show <n>] [--fix] [--open]'],
     summary: 'Tests a site definition on a saved page, offline, and shows what it extracts.',
     options: [
       ['--base-url <url>', 'address the page is served at, for relative links (default: homeUrl)'],
       ['--show <n>', 'listings to print (default 5)'],
-      ['--fix', 'fill empty fields and missing buttons from what you see on the page']
+      ['--fix', 'fill empty fields and missing buttons from what you see on the page'],
+      ['--open', 'also show the page in a visible browser, with its scripts and styles']
     ],
     notes: [
       '--fix shows the text of a listing where a field is empty, finds the value you type in it and',
