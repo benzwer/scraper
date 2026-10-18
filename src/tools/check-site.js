@@ -1,7 +1,8 @@
-// npm run check-site -- <site-id | definition.json> <page.html> [--base-url <url>] [--show <n>]
+// npm run check-site -- <site-id | definition.json> <page.html> [--base-url <url>] [--show <n>] [--fix]
 //
 // Tests a site definition against a saved HTML page, entirely offline: the page's own scripts are
-// disabled and every network request is blocked. Prints what would be extracted.
+// disabled and every network request is blocked. Prints what would be extracted. With --fix it
+// then helps filling the fields left empty (see fix-fields.js).
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
@@ -11,14 +12,16 @@ const { Site } = require('../sites/Site');
 const { loadSiteDefinition, loadSiteDefinitions, FIELDS } = require('../sites/definitions');
 const { openSavedPage } = require('./saved-page');
 const { usage, handleHelp } = require('./help');
+const { fixFields } = require('./fix-fields');
 
 const USAGE = `${usage('check-site')}\nMore: npm run check-site -- --help`;
 
 function parseArgs(argv) {
-  const args = { positional: [], baseUrl: null, show: 5 };
+  const args = { positional: [], baseUrl: null, show: 5, fix: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--base-url') args.baseUrl = argv[++i];
     else if (argv[i] === '--show') args.show = Number(argv[++i]);
+    else if (argv[i] === '--fix') args.fix = true;
     else args.positional.push(argv[i]);
   }
   if (args.positional.length !== 2 || !Number.isInteger(args.show) || args.show < 0) {
@@ -85,6 +88,8 @@ async function main() {
     if (listings.length === 0) {
       console.log('Nothing extracted: check extract.item / extract.items and the url/id fields.');
       process.exitCode = 1;
+      // Items found but without url/id: --fix can still find them.
+      if (args.fix && raw.length) await fixFields(page, definition);
       return;
     }
 
@@ -99,6 +104,12 @@ async function main() {
     if (shown.length) {
       console.log(`\nFirst ${shown.length} listing(s):`);
       for (const { source, scrapedAt, ...listing } of shown) console.log(listing);
+    }
+
+    if (args.fix) await fixFields(page, definition);
+    else if (FIELDS.some(field => listings.some(listing => listing[field] == null))) {
+      console.log('\nSome fields are empty. To find them in the page, run:');
+      console.log(`  npm run check-site -- ${process.argv.slice(2).join(' ')} --fix`);
     }
   } finally {
     await browser.close();

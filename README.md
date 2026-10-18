@@ -360,6 +360,32 @@ use `require` or variables defined outside the function. See
    extracted, which fields are always empty, and the first listings. Options: `--show <n>`
    listings to print, `--base-url <url>` to resolve relative links (default: `homeUrl`).
    You can also pass a file path instead of the id: `npm run check-site -- ./draft.json page.html`.
+
+   **Fields left empty? Add `--fix`.** First, if some of the blocks found by `extract.item`
+   are not listings (no link and no id: often the menu or the footer, when the selector is a
+   generic layout class), it says so and offers the listings and fields `analyze-page` finds
+   now. Then, for each field empty in some listings (always-empty ones first), it prints the
+   text of a listing where it is empty, tells what to look for, and asks you to type the value
+   as written there. It finds that value in the listing and proposes ways to read it (selector,
+   attribute, `match` regex or JSON path), each tried on every listing of the page:
+   ```
+   == rooms: empty in 53 of 53 listings ==
+   Text of listing 1, one where rooms is empty:
+       "Sunny flat Town: Springfield Rent: 1.250 € Surface: 85 m² Rooms: 3"
+   Find the number of rooms (e.g. 3) in the text above and type it as written there.
+   rooms (ENTER to skip this field, "q" to stop): 3
+     1. (the listing itself)  match Rooms:s*(d[d.,']*)
+        44/53 listings  -> 3, 5, 2
+     2. .facts > tbody > tr:nth-of-type(4) > td:nth-of-type(2)
+        38/53 listings  -> 3, 5, 2
+        by position: where a listing lacks an element, it may read the wrong one
+   Choose [1-2], or ENTER to skip: 1
+   ```
+   Prefer a proposal that reads the value by its label or class: positional ones come last, as
+   they read another row where a listing lacks one. Only proposals reading exactly the value
+   you typed are shown. At the end the changes are listed and saved to the definition file
+   after confirmation. A value missing from the listing usually means it is only on the detail
+   page: leave that field empty. Works with `css` and `json` definitions.
 5. **Add the search** to `user/config.json` (if `analyze-page` did not add it) and run
    `npm start` once, watching the browser.
 6. **Optional: a regression test.** Put the saved page and a test in `tests/private/` (ignored by
@@ -486,7 +512,7 @@ options of one command (e.g. `npm run analyze-page -- --help`).
 | `npm start -- --retry-blocked` | One run that also visits the portals paused after a block |
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
 | `npm run analyze-page -- <page.html> \| --url <url>` | Analyses a results page and drafts a site definition (`--write <file>` to save it) |
-| `npm run check-site -- <id or file> <page.html>` | Tests a site definition offline |
+| `npm run check-site -- <id or file> <page.html> [--fix]` | Tests a site definition offline; `--fix` helps filling the empty fields |
 | `npm run clear-today -- [--site <id>] [--yes]` | Forgets the listings first seen today, so the next run notifies them again |
 | `npm test` | Unit tests, no network |
 
@@ -508,7 +534,7 @@ src/sites/index.js          pairs the searches with their definitions
 src/human/HumanBehavior.js  mouse, wheel, clicks and pauses
 src/models/listing.js       common listing schema, parsing, filters
 src/notify/Notifier.js      ntfy and Telegram
-src/tools/                  setup, analyze-page, check-site, clear-today and help commands
+src/tools/                  setup, analyze-page, check-site (--fix: fix-fields.js), clear-today, help
 tests/                      unit tests and synthetic pages for the examples
 user/                       YOUR config and site definitions (not versioned)
 tests/private/              YOUR tests and saved pages (not versioned)

@@ -3,7 +3,9 @@
 // self-contained: no outer variables, helpers or requires. buildDraft runs in Node and turns its
 // report into a draft site definition.
 
-function analyzePage({ saveSearchText, closeName }) {
+// With `locate` ({ ...extract, index, value }) it only returns the text of that listing and, when
+// value is given, candidate field specs reading it (used by check-site --fix).
+function analyzePage({ saveSearchText, closeName, locate = null }) {
   const SAVE_SEARCH_RE = new RegExp(saveSearchText, 'i');
   const CLOSE_NAME_RE = new RegExp(closeName, 'i');
   const CLOSE_HINT_RE = /close|chiudi|dismiss|annulla|cancel/i;
@@ -400,6 +402,135 @@ function analyzePage({ saveSearchText, closeName }) {
   };
 
   // ------------------------------------------------------------------
+  // check-site --fix: how to read a value the user sees in one listing
+  // ------------------------------------------------------------------
+
+  const escapeRe = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tokenRe = value => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(value)}(?![\\p{L}\\p{N}])`, 'iu');
+  // Where the value is in the text: as a whole word if possible ("4" is not the 4 in "2.450").
+  const indexOfValue = (content, value) => {
+    const token = tokenRe(value).exec(content);
+    return token ? token.index : content.toLowerCase().indexOf(value.toLowerCase());
+  };
+
+  // A regex reading `value` out of a longer text, after the word just before it when there is one
+  // ("Rooms: 4" -> "Rooms:\s*(\d[\d.,']*)"): a number, or the text up to the next "label:".
+  // null when the text is the value itself, or (needLabel) when there is no word before it.
+  const matchFor = (content, value, { needLabel = false } = {}) => {
+    const at = indexOfValue(content, value);
+    if (at < 0 || content.trim().toLowerCase() === value.toLowerCase()) return null;
+    const label = (content.slice(0, at).match(/(\S+)\s*$/) || [])[1];
+    if (!label && needLabel) return null;
+    const head = label ? `${escapeRe(label)}\\s*` : '';
+    if (/^\d[\d.,']*$/.test(value)) return `${head}(\\d[\\d.,']*)`;
+    return label ? `${head}(.+?)(?=\\s+[^\\s:]{2,}:|$)` : null;
+  };
+
+  // Selectors finding `el` as the first match inside `item` (null: the item itself): its own
+  // selectors, then a path from the closest ancestor that has one.
+  const selectorsWithin = (item, el) => {
+    if (el === item) return [null];
+    const out = [];
+    for (const own of ownSelectors(el)) {
+      if (!own.startsWith('#') && qsa(item, own)[0] === el) out.push(own);
+    }
+    const steps = [];
+    for (let node = el; node && node !== item; node = node.parentElement) {
+      const tag = node.tagName.toLowerCase();
+      if (node !== el) {
+        const own = ownSelectors(node)
+          .find(s => !s.startsWith('#') && s !== tag && qsa(item, [s, ...steps].join(' > '))[0] === el);
+        if (own) {
+          out.push([own, ...steps].join(' > '));
+          return [...new Set(out)];
+        }
+      }
+      const sameTag = Array.from(node.parentElement?.children || []).filter(s => s.tagName === node.tagName);
+      steps.unshift(sameTag.length > 1 ? `${tag}:nth-of-type(${sameTag.indexOf(node) + 1})` : tag);
+    }
+    const path = [':scope', ...steps].join(' > ');
+    if (qsa(item, path)[0] === el) out.push(path);
+    return [...new Set(out)];
+  };
+
+  // For an attribute like href="/flat-bolzano-376568.html" and the value 376568: "-(\d+)".
+  const attrMatch = (content, value) => {
+    if (content.toLowerCase() === value.toLowerCase() || !/^\d+$/.test(value)) return null;
+    const before = content[content.indexOf(value) - 1] || '';
+    return `${/\w/.test(before) ? '' : escapeRe(before)}(\\d+)`;
+  };
+
+  const locateInCards = ({ item: itemSelector, index, value }) => {
+    const items = qsa(document, itemSelector);
+    const item = items[index];
+    const result = { count: items.length, text: item ? snippet(text(item), 600) : null, candidates: [] };
+    if (!item || !value) return result;
+    const add = spec => result.candidates.push(spec);
+    // Whole words when the listing has the value as one, else any substring.
+    const asToken = tokenRe(value).test(text(item));
+    const includesValue = content =>
+      asToken ? tokenRe(value).test(content) : content.toLowerCase().includes(value.toLowerCase());
+
+    const holders = qsa(item, '*').filter(el => includesValue(text(el)));
+    const deepest = holders.filter(el => !holders.some(other => other !== el && el.contains(other)));
+    if (!deepest.length && includesValue(text(item))) deepest.push(item);
+
+    for (const el of deepest.slice(0, 5)) {
+      const match = matchFor(text(el), value);
+      for (const selector of selectorsWithin(item, el)) add({ selector, match });
+      // The same value read from a wider block by its label: it still works when a row is missing.
+      for (let node = el === item ? null : el.parentElement; node; node = node === item ? null : node.parentElement) {
+        const labelled = matchFor(text(node), value, { needLabel: true });
+        if (labelled) add({ selector: selectorsWithin(item, node)[0] ?? null, match: labelled });
+      }
+    }
+
+    for (const el of [item, ...qsa(item, '*')]) {
+      for (const { name, value: content } of Array.from(el.attributes)) {
+        if (/^(class|style)$/.test(name) || !includesValue(content)) continue;
+        add({ selector: selectorsWithin(item, el)[0] ?? null, attr: name, match: attrMatch(content, value) });
+      }
+    }
+
+    result.candidates = result.candidates.slice(0, 30);
+    return result;
+  };
+
+  const locateInJson = ({ script, items: itemsPath, index, value }) => {
+    const result = { count: 0, text: null, candidates: [] };
+    let data;
+    try {
+      data = JSON.parse(qsa(document, script)[0]?.textContent || '');
+    } catch {
+      return result;
+    }
+    const items = resolvePath(data, itemsPath).find(Array.isArray) || [];
+    const item = items[index];
+    result.count = items.length;
+    result.text = item == null ? null : snippet(JSON.stringify(item), 600);
+    if (item == null || !value) return result;
+
+    const walk = (node, path, depth) => {
+      if (node == null || depth > 6) return;
+      if (typeof node === 'object') {
+        for (const [key, child] of Object.entries(node)) {
+          if (Array.isArray(node)) walk(child, `${path}[${key}]`, depth + 1);
+          else if (/^[\w$-]+$/.test(key)) walk(child, path ? `${path}.${key}` : key, depth + 1);
+        }
+      } else if (path && String(node).toLowerCase().includes(value.toLowerCase())) {
+        const match = matchFor(String(node), value);
+        result.candidates.push({ path, match });
+        // "photos[0].alt" -> "photos[*].alt" also finds it when the first element lacks it.
+        const generic = path.replace(/\[\d+\]/g, '[*]');
+        if (generic !== path) result.candidates.push({ path: generic, match });
+      }
+    };
+    walk(item, '', 0);
+    result.candidates = result.candidates.slice(0, 30);
+    return result;
+  };
+
+  // ------------------------------------------------------------------
   // Next page, cookie banner, popups
   // ------------------------------------------------------------------
 
@@ -483,6 +614,8 @@ function analyzePage({ saveSearchText, closeName }) {
       };
     });
   };
+
+  if (locate) return locate.type === 'json' ? locateInJson(locate) : locateInCards(locate);
 
   const cookies = cookieElements();
   return {

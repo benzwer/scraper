@@ -14,7 +14,6 @@
 // the page URL.
 const fs = require('node:fs');
 const path = require('node:path');
-const readline = require('node:readline/promises');
 const { chromium } = require('playwright-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
@@ -26,6 +25,7 @@ const { validateDefinition, FIELDS } = require('../sites/definitions');
 const { findBlockSignal } = require('../sites/blocking');
 const { openSavedPage } = require('./saved-page');
 const { usage, handleHelp } = require('./help');
+const { ask } = require('./ask');
 
 chromium.use(StealthPlugin());
 
@@ -49,14 +49,6 @@ function parseArgs(argv) {
 
 const heading = title => console.log(`\n== ${title} ==`);
 
-async function ask(question) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return (await rl.question(question)).trim();
-  } finally {
-    rl.close();
-  }
-}
 const coverage = (field, total) => `${field.coverage}/${total}`.padEnd(6);
 
 function printCards(cards) {

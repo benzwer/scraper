@@ -42,13 +42,16 @@ const COMMANDS = [
   {
     group: 'Site definitions',
     name: 'check-site',
-    usage: ['npm run check-site -- <site-id | definition.json> <page.html> [--base-url <url>] [--show <n>]'],
+    usage: ['npm run check-site -- <id | file.json> <page.html> [--base-url <url>] [--show <n>] [--fix]'],
     summary: 'Tests a site definition on a saved page, offline, and shows what it extracts.',
     options: [
       ['--base-url <url>', 'address the page is served at, for relative links (default: homeUrl)'],
-      ['--show <n>', 'listings to print (default 5)']
+      ['--show <n>', 'listings to print (default 5)'],
+      ['--fix', 'for each empty field: type a value you see, choose how to read it']
     ],
-    example: 'npm run check-site -- my-portal data/debug/analyze_my-portal.example.html'
+    notes: ['--fix shows the text of a listing where the field is empty, finds the value you type in it and',
+      'proposes selectors or JSON paths, tried on every listing. The choices are saved after confirmation.'],
+    example: 'npm run check-site -- my-portal data/debug/analyze_my-portal.example.html --fix'
   },
   {
     group: 'Data',
