@@ -101,6 +101,13 @@ seconds: each portal has its own browser and sees nothing of the others; set
 **Cleanup:** listings not seen for 90 days are removed from `data/seen.json`
 (`store.retentionDays`).
 
+**Forgetting today's listings:** `npm run clear-today` removes from `data/seen.json` the
+listings first seen today, from every portal or, with `--site <id or name>`, from one. The next
+run finds them again and notifies them as new. It lists what it will remove and asks for
+confirmation (`--yes` to skip it). Run it while the scraper is stopped, since a running
+`npm run watch` would overwrite the file. If a portal is left with no listings, its next run
+counts as its first and only records them, without notifications.
+
 **Blocks:** if a portal refuses access, the scraper stops visiting it for a while and notifies
 you. See [When a portal blocks you](#when-a-portal-blocks-you).
 
@@ -476,6 +483,7 @@ sudo systemctl stop rental-scraper             # stop it
 | `npm run watch` | Periodic runs within the active hours. Stop with Ctrl+C |
 | `npm run analyze-page -- <page.html> \| --url <url>` | Analyses a results page and drafts a site definition (`--write <file>` to save it) |
 | `npm run check-site -- <id or file> <page.html>` | Tests a site definition offline |
+| `npm run clear-today -- [--site <id>] [--yes]` | Forgets the listings first seen today, so the next run notifies them again |
 | `npm test` | Unit tests, no network |
 
 ## Project structure
@@ -496,7 +504,7 @@ src/sites/index.js          pairs the searches with their definitions
 src/human/HumanBehavior.js  mouse, wheel, clicks and pauses
 src/models/listing.js       common listing schema, parsing, filters
 src/notify/Notifier.js      ntfy and Telegram
-src/tools/                  setup, analyze-page and check-site commands
+src/tools/                  setup, analyze-page, check-site and clear-today commands
 tests/                      unit tests and synthetic pages for the examples
 user/                       YOUR config and site definitions (not versioned)
 tests/private/              YOUR tests and saved pages (not versioned)

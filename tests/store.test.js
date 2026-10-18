@@ -62,3 +62,17 @@ test('prune keeps everything when retentionDays is null', async () => {
   store.data.listings['A:1'].lastSeen = '2000-01-01T00:00:00.000Z';
   assert.equal(store.prune(), 0);
 });
+
+test('removeWhere forgets the matching listings, which are then new again', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const store = new ResultStore(dir);
+  await store.load();
+
+  store.registerMany([make('A', '1'), make('A', '2', { price: 1500 }), make('B', '7', { price: 1700 })]);
+  const removed = store.removeWhere(item => item.source === 'A' && item.id === '1');
+
+  assert.deepEqual(removed.map(item => item.id), ['1']);
+  assert.deepEqual(Object.keys(store.data.listings), ['A:2', 'B:7']);
+  assert.deepEqual(Object.keys(store.data.cross), ['1500|80|3', '1700|80|3']);
+  assert.deepEqual(store.registerMany([make('A', '1')]).added.map(item => item.id), ['1']);
+});

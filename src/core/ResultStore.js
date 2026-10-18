@@ -100,17 +100,14 @@ class ResultStore {
     return { added, duplicates };
   }
 
-  // Removes listings not seen since before the retention window, and the cross keys pointing to them.
-  prune(now = Date.now()) {
-    if (this.retentionDays == null) return 0;
-
-    const cutoff = now - this.retentionDays * 24 * 60 * 60 * 1000;
-    let removed = 0;
-
+  // Removes the listings matching predicate(listing) and the cross keys pointing to them, so they
+  // are new again at the next run. Returns the removed listings.
+  removeWhere(predicate) {
+    const removed = [];
     for (const [key, item] of Object.entries(this.data.listings)) {
-      if (Date.parse(item.lastSeen) < cutoff) {
+      if (predicate(item)) {
         delete this.data.listings[key];
-        removed++;
+        removed.push(item);
       }
     }
 
@@ -119,6 +116,14 @@ class ResultStore {
     }
 
     return removed;
+  }
+
+  // Removes listings not seen since before the retention window, and the cross keys pointing to them.
+  prune(now = Date.now()) {
+    if (this.retentionDays == null) return 0;
+
+    const cutoff = now - this.retentionDays * 24 * 60 * 60 * 1000;
+    return this.removeWhere(item => Date.parse(item.lastSeen) < cutoff).length;
   }
 
   async save() {

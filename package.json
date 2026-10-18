@@ -11,6 +11,7 @@
     "setup": "node src/tools/setup.js",
     "check-site": "node src/tools/check-site.js",
     "analyze-page": "node src/tools/analyze-page.js",
+    "clear-today": "node src/tools/clear-today.js",
     "test": "node --test"
   },
   "engines": { "node": ">=18" },
