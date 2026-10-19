@@ -568,9 +568,9 @@ docker compose logs -f              # follow the log (also in data/logs/)
 It starts again by itself after a crash or a reboot. `docker compose stop` stops it: it gets
 SIGINT, like Ctrl+C, and saves before exiting.
 
-The container runs as the user with uid 1000, normally the first user of the VM (check with
-`id -u`). With a different uid, give that user the folders: `sudo chown -R 1000:1000 user data
-browser-profile`.
+The container runs as the owner of the `user/` folder, whatever their uid: it reads your files
+and the ones it writes in `data/` and `browser-profile/` are yours. So create the three folders
+as your own user, not with `sudo`, and keep them yours.
 
 The time zone is `Europe/Rome` (`TZ` in `docker-compose.yml`): `watch.activeHours` follows it.
 

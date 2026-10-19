@@ -15,8 +15,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY . .
 
-# uid 1000, normally the first user of the host: the files written in the mounted folders are yours.
-USER ubuntu
+# Starts as root only to take the uid of the owner of user/, then runs as that user.
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
 ENV DISPLAY=:99
 
 # Stale X files (left by a stopped container) would stop Xvfb from starting again. node is exec'd
