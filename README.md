@@ -628,6 +628,7 @@ src/sites/index.js          pairs the searches with their definitions
 src/human/HumanBehavior.js  mouse, wheel, clicks and pauses
 src/models/listing.js       common listing schema, parsing, filters
 src/notify/Notifier.js      ntfy and Telegram
+src/notify/telegramFormat.js  layout of the Telegram messages
 src/tools/                  setup, analyze-page, check-site (--fix: fix-fields.js), clear-today, help
 tests/                      unit tests and synthetic pages for the examples
 user/                       YOUR config and site definitions (not versioned)

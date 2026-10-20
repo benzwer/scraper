@@ -7,6 +7,7 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { delay, sleep, rand, shuffle } = require('../utils/random');
 const { createLogger } = require('../utils/logger');
 const { passesFilters, formatListing } = require('../models/listing');
+const { listingMessage, digestMessage } = require('../notify/telegramFormat');
 
 chromium.use(StealthPlugin());
 
@@ -176,12 +177,14 @@ class Scraper {
     if (relevant.length === 0) return;
 
     if (relevant.length <= notify.maxIndividual) {
-      for (const listing of relevant) await this.notifier.send(formatListing(listing));
+      for (const listing of relevant) {
+        await this.notifier.send({ ...formatListing(listing), html: listingMessage(listing) });
+      }
       return;
     }
 
-    const lines = relevant
-      .slice(0, notify.digestSize)
+    const shown = relevant.slice(0, notify.digestSize);
+    const lines = shown
       .map(listing => {
         const { message, url } = formatListing(listing);
         return `• ${message}\n${url || ''}`;
@@ -190,7 +193,8 @@ class Scraper {
 
     await this.notifier.send({
       title: `${siteName}: ${relevant.length} new listings`,
-      message: lines
+      message: lines,
+      html: digestMessage(siteName, shown, relevant.length)
     });
   }
 
