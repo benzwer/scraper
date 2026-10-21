@@ -152,6 +152,31 @@ test('cards: the tightest selector, not a layout class shared with the header; l
   assert.equal(report.cards[0].fields.url.coverage, 3);
 });
 
+test('cards: a page with a single listing still yields the card and a working draft', () => {
+  const report = analyzeFile('single-card-example.html');
+
+  assert.equal(report.cards.length, 1);
+  assert.equal(report.cards[0].selector, '.property');     // with the photo, not the layout wrappers
+  assert.equal(report.cards[0].count, 1);
+  assert.equal(report.cards[0].single, true);
+
+  const { definition, notes } = buildDraft(report);
+  assert.ok(notes.some(note => /Only one listing/.test(note)));
+  const [listing] = extractFromFile(validateDefinition(definition), fixture('single-card-example.html'));
+  assert.equal(listing.url, 'https://www.example.com/rent/flat/42/');
+  assert.equal(listing.title, 'Sunny studio near the park');
+  assert.equal(listing.price, 770);
+  assert.equal(listing.surface, 30);
+  assert.equal(listing.rooms, 1);
+});
+
+test('cards: repeated cards do not get the single-card note', () => {
+  const report = analyzeFile('cards-example.html');
+
+  assert.equal(report.cards[0].single, undefined);
+  assert.ok(!buildDraft(report).notes.some(note => /Only one listing/.test(note)));
+});
+
 test('locate clickable: buttons and links by text or link, with their selectors', () => {
   const dom = new JSDOM(fs.readFileSync(fixture('cards-example.html'), 'utf8'), { url: 'https://www.example.com/search' });
   global.document = dom.window.document;

@@ -31,6 +31,7 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     surface: '(\\d+(?:[.,]\\d+)?)\\s*(?:m²|m2|mq|sqm|metri)',
     rooms: '(\\d+)\\+?\\s*(?:local[ei]|vani|camer[ae]|stanz[ae]|rooms?|bedrooms?)'
   };
+  const PRICE_MATCH = '(\\d[\\d.,]*)\\s*(?:€|eur\\b)';
   // How a JSON path is recognised as a field. "last": the last key, whole. "words": one of the
   // words of the path ("category.parentId" is category/parent/id: no "rent" in it). "distinct": the
   // value changes from listing to listing (a category id is the same for all). "name": a text with
@@ -230,7 +231,13 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     const title = cardField(items, isTitle);
     if (title) fields.title = title;
 
-    const price = cardField(items, textTest(PATTERNS.price));
+    let price = cardField(items, textTest(PATTERNS.price));
+    // "1 locale - 770 €": the first number is not the price, so a match picks the one before €.
+    const priceText = price && price.sample;
+    const beforeCurrency = priceText && priceText.match(new RegExp(PRICE_MATCH, 'i'));
+    if (beforeCurrency && priceText.match(/\d[\d.,]*/)[0] !== beforeCurrency[1]) {
+      price = cardField(items, textTest(PATTERNS.price), { match: PRICE_MATCH });
+    }
     if (price) fields.price = price;
     for (const name of ['surface', 'rooms']) {
       const found = cardField(items, textTest(PATTERNS[name]), { match: MATCH[name] });
@@ -257,6 +264,29 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
     return best;
   };
 
+  // The only listing of the page: the deepest element with a link and at least two of price,
+  // surface and rooms (one alone is too weak without repetition to confirm it). It then grows to
+  // the parent while that adds only elements without text, like the photo next to the text block;
+  // a wrapper whose other children are empty (clearfix divs) or that has no others is layout.
+  const findSingleCard = () => {
+    if (!body) return null;
+    const hints = el => [PATTERNS.price, PATTERNS.surface, PATTERNS.rooms].filter(p => p.test(text(el))).length;
+    const candidates = qsa(body, '*').filter(el =>
+      !/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|svg)$/i.test(el.tagName) && looksLikeCard(el) && hints(el) >= 2);
+    if (!candidates.length) return null;
+
+    const most = Math.max(...candidates.map(hints));
+    const best = candidates.filter(el => hints(el) === most);
+    let card = best.find(el => !best.some(other => other !== el && el.contains(other)));
+    const hasContent = el => el.children.length > 0 || /^(IMG|PICTURE|A)$/.test(el.tagName);
+    const addsOnlyMedia = (parent, child) => text(parent) === text(child) &&
+      Array.from(parent.children).some(sibling => sibling !== child && hasContent(sibling));
+    while (card.parentElement && card.parentElement !== body && addsOnlyMedia(card.parentElement, card)) {
+      card = card.parentElement;
+    }
+    return card;
+  };
+
   const findCards = () => {
     if (!body) return [];
     const groups = [];
@@ -277,6 +307,10 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
       }
     }
 
+    // A search with one result has nothing repeated: fall back to that single card.
+    const single = groups.length ? null : findSingleCard();
+    if (single) groups.push({ members: [single], score: 1 });
+
     return groups
       .sort((a, b) => b.score - a.score)
       .slice(0, 3)
@@ -284,7 +318,8 @@ function analyzePage({ saveSearchText, closeName, locate = null }) {
         const found = cardSelector(members);
         if (!found) return null;
         const items = qsa(document, found.selector).slice(0, 20);
-        return { ...found, sample: snippet(text(members[0]), 100), fields: cardFields(items) };
+        const card = { ...found, sample: snippet(text(members[0]), 100), fields: cardFields(items) };
+        return members.length === 1 ? { ...card, single: true } : card;
       })
       .filter(Boolean);
   };
@@ -717,6 +752,10 @@ function chooseExtract(report, origin, notes) {
   if (cards && (cards.fields.url || cards.fields.id)) {
     const fields = {};
     for (const [name, field] of Object.entries(cards.fields)) fields[name] = cssFieldSpec(field);
+    if (cards.single) {
+      notes.push(`Only one listing on the page: "${cards.selector}" is a best guess. ` +
+        'Check it with check-site when the search has more results.');
+    }
     return { type: 'css', item: cards.selector, fields };
   }
 
