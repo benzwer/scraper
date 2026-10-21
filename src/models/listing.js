@@ -33,6 +33,8 @@ function parseRooms(value) {
   return match ? parseInt(match[1], 10) : null;
 }
 
+const MAX_DESCRIPTION = 1000;
+
 function normalizeListing(raw, source) {
   if (!raw) return null;
 
@@ -50,6 +52,10 @@ function normalizeListing(raw, source) {
     surface: parseSurface(raw.surface),
     rooms: parseRooms(raw.rooms),
     city: raw.city != null ? String(raw.city) : null,
+    // Only used by filters.excludeWords: cut so that data/seen.json does not grow too much.
+    description: raw.description != null
+      ? String(raw.description).replace(/\s+/g, ' ').trim().slice(0, MAX_DESCRIPTION) || null
+      : null,
     scrapedAt: new Date().toISOString()
   };
 }
@@ -64,9 +70,25 @@ function crossKey(listing) {
   return `${listing.price}|${listing.surface}|${listing.rooms}`;
 }
 
-function passesFilters(listing, filters = {}) {
-  const { maxPrice, minSurface, minRooms, maxRooms } = filters;
+// Lowercase and without accents, so "citta" also finds "Città".
+const foldText = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// The first of `words` found in the title or the description, or null. A word matches the words
+// starting with it: "student" finds "studenti" and "studentesse", not "mystudent".
+function excludedWord(listing, words = []) {
+  const content = foldText([listing.title, listing.description].filter(Boolean).join(' '));
+  if (!content) return null;
+  return words.find(word => {
+    const folded = foldText(String(word).trim());
+    return folded && new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(folded)}`, 'u').test(content);
+  }) ?? null;
+}
+
+function passesFilters(listing, filters = {}) {
+  const { maxPrice, minSurface, minRooms, maxRooms, excludeWords } = filters;
+
+  if (excludedWord(listing, excludeWords)) return false;
   if (maxPrice != null && listing.price != null && listing.price > maxPrice) return false;
   if (minSurface != null && listing.surface != null && listing.surface < minSurface) return false;
   if (minRooms != null && listing.rooms != null && listing.rooms < minRooms) return false;
@@ -99,5 +121,6 @@ module.exports = {
   listingKey,
   crossKey,
   passesFilters,
+  excludedWord,
   formatListing
 };

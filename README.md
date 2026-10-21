@@ -148,6 +148,7 @@ typos.
 | `filters.maxPrice` | `null` | Notify only listings up to this price. `null` = no limit |
 | `filters.minSurface` | `null` | Minimum surface in m² |
 | `filters.minRooms` / `filters.maxRooms` | `null` | Room range |
+| `filters.excludeWords` | `[]` | Words that keep a listing out of the notifications, e.g. `["transitorio", "studenti"]`: see below |
 | `pages.firstRun` / `pages.incremental` | `2` / `1` | Pages read on a portal's first run / afterwards |
 | `notify.onFirstRun` | `false` | `true` notifies every listing found on the first run too |
 | `notify.maxIndividual` | `5` | Above this many new listings, send one digest instead |
@@ -162,6 +163,14 @@ typos.
 
 Filters only affect **notifications**: every listing is still saved. A listing with a missing
 value (e.g. no surface) passes the corresponding filter.
+
+**Filtering by words**, for what the portal cannot filter (short lets, students only, offices…):
+a listing with one of the `filters.excludeWords` in its title or description is not notified.
+Capitals and accents do not matter, and a word also finds the words starting with it
+(`"student"` finds *studenti* and *studentesse*). The description is searched only if the site
+definition reads it (the `description` field): `npm run check-site -- <site> <page.html> --fix`
+asks the words, finds the description from a few words you see in it, and shows which listings
+of the page would be left out. Beware of negations: `"arredato"` also excludes *non arredato*.
 
 ## Notifications: `.env`
 
@@ -232,6 +241,7 @@ filters, duplicate detection and notifications work better.
 | `surface` | Surface | `85 m²`, `72,5 mq` or a bare `85` |
 | `rooms` | Rooms | First number found: `3 rooms`, `4+`, `3 locali` |
 | `city` | City or area | |
+| `description` | Description text (optional) | Only searched by `filters.excludeWords`; kept up to 1000 characters |
 
 Every field can also have:
 
@@ -383,23 +393,37 @@ use `require` or variables defined outside the function. See
    as written there. It finds that value in the listing and proposes ways to read it (selector,
    attribute, `match` regex or JSON path), each tried on every listing of the page:
    ```
-   == rooms: empty in 53 of 53 listings ==
-   Text of listing 1, one where rooms is empty:
-       "Sunny flat Town: Springfield Rent: 1.250 € Surface: 85 m² Rooms: 3"
-   Find the number of rooms (e.g. 3) in the text above and type it as written there.
-   rooms (ENTER to skip this field, "q" to stop): 3
-     1. (the listing itself)  match Rooms:s*(d[d.,']*)
-        44/53 listings  -> 3, 5, 2
+   ━━ rooms  empty in 53 of 53 listings ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     Text of listing 1, one where rooms is empty:
+       │ Sunny flat Town: Springfield Rent: 1.250 € Surface: 85 m² Rooms: 3
+   › Find the number of rooms (e.g. 3) in the text above and type it as written there.
+   ? rooms (ENTER to skip this field, "q" to stop): 3
+     1. (the listing itself)  match Rooms:\s*(\d[\d.,']*)
+        ████████░░ 44/53 → 3, 5, 2
      2. .facts > tbody > tr:nth-of-type(4) > td:nth-of-type(2)
-        38/53 listings  -> 3, 5, 2
+        ███████░░░ 38/53 → 3, 5, 2
         by position: where a listing lacks an element, it may read the wrong one
-   Choose [1-2], or ENTER to skip: 1
+   ? Choose [1-2], or ENTER to skip: 1
    ```
    Prefer a proposal that reads the value by its label or class: positional ones come last, as
    they read another row where a listing lacks one. Only proposals reading exactly the value
    you typed are shown. At the end the changes are listed and saved to the definition file
    after confirmation. A value missing from the listing usually means it is only on the detail
    page: leave that field empty. The fields part works with `css` and `json` definitions.
+
+   Then the **word filter** (`filters.excludeWords`, see "Filtering by words"): type the words
+   to exclude, separated by commas (ENTER keeps the current ones, `-` removes them all). If the
+   definition does not read the description yet, type a few words you see in it to find where
+   it is, as for the other fields. It then lists the listings of the page the words would leave
+   out, with the words around the one found:
+   ```
+   › On this page 2 of 16 listing(s) would not be notified:
+       ✗ "transitorio"  …contratto transitorio di 6 mesi, ideale per…
+       ✗ "studenti"  …bilocale arredato, solo studenti, a due passi…
+   ```
+   The words are saved in `user/config.json`, the description field in the definition, both
+   after the final confirmation. `check-site` without `--fix` shows the same list when
+   `filters.excludeWords` is set.
 
    Then come the **page selectors**. The next-page button it finds is shown (e.g.
    `<a> "Avanti" -> /rent?page=2`) for you to confirm: a lookalike such as a photo carousel's

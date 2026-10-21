@@ -4,7 +4,7 @@ const path = require('node:path');
 // Loads and validates the site definitions (one JSON file per site, see README).
 // Validation is strict on purpose: a typo in a key would otherwise fail silently while scraping.
 
-const FIELDS = ['id', 'url', 'title', 'price', 'surface', 'rooms', 'city'];
+const FIELDS = ['id', 'url', 'title', 'price', 'surface', 'rooms', 'city', 'description'];
 const ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 const ALLOWED = {

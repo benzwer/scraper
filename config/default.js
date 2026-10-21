@@ -35,11 +35,14 @@ module.exports = {
 
   // Filters applied to NOTIFICATIONS only (all data is still saved).
   // null means "no limit"; a value missing from the listing passes the filter.
+  // excludeWords: listings with one of these words in the title or description are not notified
+  // (the description is read only if the site definition has a "description" field).
   filters: {
     maxPrice: null,
     minSurface: null,
     minRooms: null,
-    maxRooms: null
+    maxRooms: null,
+    excludeWords: []
   },
 
   notify: {

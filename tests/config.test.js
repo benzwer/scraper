@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { loadConfig, addSearch, deepMerge } = require('../src/core/config');
+const { loadConfig, addSearch, setExcludeWords, deepMerge } = require('../src/core/config');
 
 const defaults = {
   paths: { userDir: null },
@@ -72,4 +72,25 @@ test('addSearch keeps CRLF line endings and never touches an invalid file', () =
   const broken = userDirWith('{ "searches": [');
   assert.throws(() => addSearch(broken, search), /invalid JSON .*not changed/);
   assert.equal(fs.readFileSync(path.join(broken, 'config.json'), 'utf8'), '{ "searches": [');
+});
+
+test('filters.excludeWords must be a list of words', () => {
+  const withWords = excludeWords => userDirWith({ searches: [search], filters: { excludeWords } });
+  assert.deepEqual(loadConfig(defaults, withWords(['transitorio'])).config.filters.excludeWords, ['transitorio']);
+  assert.throws(() => loadConfig(defaults, withWords('transitorio')), /filters\.excludeWords: must be a list/);
+  assert.throws(() => loadConfig(defaults, withWords(['ok', ''])), /filters\.excludeWords/);
+});
+
+test('setExcludeWords writes the words, keeps the rest and CRLF, removes the key when empty', () => {
+  const dir = userDirWith(JSON.stringify({ searches: [search], filters: { maxPrice: 900 } }, null, 2).replace(/\n/g, '\r\n'));
+  const file = path.join(dir, 'config.json');
+
+  setExcludeWords(dir, ['transitorio', 'studenti']);
+  assert.match(fs.readFileSync(file, 'utf8'), /\r\n/);
+  const { config, searches } = loadConfig(defaults, dir);
+  assert.deepEqual(config.filters, { maxPrice: 900, minRooms: null, excludeWords: ['transitorio', 'studenti'] });
+  assert.deepEqual(searches, [search]);
+
+  setExcludeWords(dir, []);
+  assert.equal('excludeWords' in JSON.parse(fs.readFileSync(file, 'utf8')).filters, false);
 });

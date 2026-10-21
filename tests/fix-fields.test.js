@@ -5,7 +5,7 @@ const path = require('node:path');
 const { JSDOM } = require('jsdom');
 
 const { analyzePage } = require('../src/sites/analyze');
-const { rankCandidates, compactSpec } = require('../src/tools/fix-fields');
+const { rankCandidates, compactSpec, wordContext } = require('../src/tools/fix-fields');
 
 const fixture = name => path.join(__dirname, 'fixtures', name);
 
@@ -102,4 +102,11 @@ test('compactSpec writes specs as a person would', () => {
   assert.equal(compactSpec({ selector: '.x', attr: null, match: null }), '.x');
   assert.equal(compactSpec({ path: 'a.b', match: null }), 'a.b');
   assert.deepEqual(compactSpec({ selector: null, match: 'Rooms:\\s*(\\d+)' }), { match: 'Rooms:\\s*(\\d+)' });
+});
+
+test('wordContext: the words around the excluded one, to recognise the listing', () => {
+  const listing = { title: 'Bolzano', description: 'Bright flat on the second floor, contratto transitorio di sei mesi, ideale per lavoratori' };
+  assert.equal(wordContext(listing, 'transitorio', 2), '…floor, contratto transitorio di sei…');
+  assert.equal(wordContext({ title: 'Transitorio a Bolzano' }, 'transitorio', 2), 'Transitorio a Bolzano');
+  assert.equal(wordContext({ title: 'Bolzano' }, 'missing'), '');
 });

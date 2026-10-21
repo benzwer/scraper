@@ -59,9 +59,11 @@ const COMMANDS = [
     ],
     notes: [
       '--fix shows the text of a listing where a field is empty, finds the value you type in it and',
-      'proposes selectors or JSON paths, tried on every listing. Then, for the next-page button, the',
-      'cookie banner and popups the scraper does not find, it finds the button by the text you type.',
-      'The choices are saved after confirmation.'
+      'proposes selectors or JSON paths, tried on every listing. Then it asks the words that keep a',
+      'listing out of the notifications (filters.excludeWords) and where the description is, and shows',
+      'which listings of the page they leave out. Last, for the next-page button, the cookie banner and',
+      'popups the scraper does not find, it finds the button by the text you type.',
+      'The choices are saved after confirmation (the words in user/config.json).'
     ],
     example: 'npm run check-site -- my-portal data/debug/analyze_my-portal.example.html --fix'
   },

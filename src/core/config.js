@@ -36,7 +36,30 @@ function validateUserConfig(user, defaults, file) {
     });
   }
 
+  const excludeWords = user.filters?.excludeWords;
+  if (excludeWords != null &&
+    !(Array.isArray(excludeWords) && excludeWords.every(word => typeof word === 'string' && word.trim()))) {
+    errors.push('filters.excludeWords: must be a list of words, e.g. ["transitorio", "studenti"]');
+  }
+
   if (errors.length) throw new Error(`${file}:\n  - ${errors.join('\n  - ')}`);
+}
+
+// Sets filters.excludeWords in <userDir>/config.json, keeping the rest of the file and its line
+// endings. An empty list removes the key.
+function setExcludeWords(userDir, words) {
+  const file = path.join(userDir, 'config.json');
+  const text = fs.readFileSync(file, 'utf8');
+  const user = JSON.parse(text);
+  if (!isObject(user)) throw new Error(`${file}: must contain a JSON object, not changed`);
+
+  const filters = isObject(user.filters) ? user.filters : {};
+  if (words.length) filters.excludeWords = words;
+  else delete filters.excludeWords;
+  user.filters = filters;
+
+  const json = `${JSON.stringify(user, null, 2)}\n`;
+  fs.writeFileSync(file, text.includes('\r\n') ? json.replace(/\n/g, '\r\n') : json, 'utf8');
 }
 
 // Returns { config, searches }.
@@ -88,4 +111,4 @@ function addSearch(userDir, search) {
   return true;
 }
 
-module.exports = { loadConfig, addSearch, deepMerge };
+module.exports = { loadConfig, addSearch, setExcludeWords, deepMerge };

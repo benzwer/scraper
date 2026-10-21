@@ -109,3 +109,10 @@ test('loadSiteDefinitions with onInvalid skips invalid definitions and keeps the
   assert.deepEqual(skipped.map(([id]) => id), ['broken', 'draft-site']);   // file name when unreadable
   assert.match(skipped[1][1], /draft\.json:\n {2}- extract/);
 });
+
+test('description is an optional field like the others', () => {
+  const definition = validateDefinition(cssSite({
+    extract: { type: 'css', item: '.card', fields: { url: { selector: 'a', attr: 'href' }, description: '.text' } }
+  }));
+  assert.deepEqual(definition.extract.fields.description, { selector: '.text' });
+});

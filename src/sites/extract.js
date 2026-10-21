@@ -2,7 +2,7 @@
 // normalised by definitions.js). It runs in the browser through page.evaluate, so it must be
 // self-contained: no outer variables, helpers or requires.
 function extractListings(extract) {
-  const FIELDS = ['id', 'url', 'title', 'price', 'surface', 'rooms', 'city'];
+  const FIELDS = ['id', 'url', 'title', 'price', 'surface', 'rooms', 'city', 'description'];
 
   // "a.b[0].c" -> every value reached; "[*]" fans out over all the elements of an array.
   const resolvePath = (root, path) => {
