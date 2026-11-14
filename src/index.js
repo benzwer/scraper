@@ -9,10 +9,30 @@ const { Scraper } = require('./core/Scraper');
 const { Notifier } = require('./notify/Notifier');
 const { createSites, searchesForSites } = require('./sites');
 const { loadSiteDefinitions } = require('./sites/definitions');
-const { createLogger, setLogDir } = require('./utils/logger');
+const { createLogger, setLogDir, setAlertHandler } = require('./utils/logger');
 const { generalHelp } = require('./tools/help');
 
 const log = createLogger('main');
+
+// Warnings and errors still being sent, awaited before exiting on a fatal error.
+const pendingAlerts = new Set();
+const ALERT_WAIT_MS = 10000;
+
+// Every warning and error is also notified. The Notifier's own warnings are not: they report
+// that sending failed, and notifying them would loop.
+function notifyWarningsAndErrors(notifier) {
+  setAlertHandler(alert => {
+    if (alert.scope === 'Notifier') return;
+    const sending = notifier.alert(alert).finally(() => pendingAlerts.delete(sending));
+    pendingAlerts.add(sending);
+  });
+}
+
+function waitForAlerts() {
+  if (pendingAlerts.size === 0) return Promise.resolve();
+  const timeout = new Promise(resolve => setTimeout(resolve, ALERT_WAIT_MS).unref());
+  return Promise.race([Promise.allSettled([...pendingAlerts]), timeout]);
+}
 
 // The values of every --site option ("--site a --site b" or "--site a,b").
 function siteArgs(argv) {
@@ -31,6 +51,9 @@ async function main() {
     console.log(generalHelp());
     return;
   }
+
+  const notifier = new Notifier();
+  notifyWarningsAndErrors(notifier);
 
   const watch = process.argv.includes('--watch');
   const retryBlocked = process.argv.includes('--retry-blocked');
@@ -56,7 +79,6 @@ async function main() {
   const store = new ResultStore(config.paths.dataDir, config.store);
   await store.load();
 
-  const notifier = new Notifier();
   log.info(`Notifications: ${notifier.describeChannels()}`);
 
   const sites = createSites(runnable, definitions, { config, notifier });
@@ -82,7 +104,8 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch(async error => {
   log.error('Fatal error:', error);
+  await waitForAlerts();
   process.exit(1);
 });

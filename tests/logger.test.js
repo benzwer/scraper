@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { createLogger, setLogDir, removeOldLogs } = require('../src/utils/logger');
+const { createLogger, setLogDir, setAlertHandler, removeOldLogs } = require('../src/utils/logger');
 
 test('the log goes to the terminal and, once set, to one file per day', t => {
   const printed = [];
@@ -54,4 +54,25 @@ test('the first line logged by the scraper deletes the old daily logs', t => {
   const files = fs.readdirSync(dir);
   assert.equal(files.length, 1);
   assert.notEqual(files[0], '2000-01-01.log');
+});
+
+test('warnings and errors reach the alert handler, info does not; a failing handler is ignored', t => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'error', () => {});
+  const alerts = [];
+  setAlertHandler(alert => alerts.push(alert));
+  t.after(() => setAlertHandler(null));
+
+  const log = createLogger('Site A');
+  log.info('read %d listings', 21);
+  log.warn('blocked (%s)', 'captcha');
+  log.error('page failed');
+  assert.deepEqual(alerts, [
+    { level: 'warn', scope: 'Site A', text: 'blocked (captcha)' },
+    { level: 'error', scope: 'Site A', text: 'page failed' }
+  ]);
+
+  setAlertHandler(() => { throw new Error('boom'); });
+  assert.doesNotThrow(() => log.warn('still logged'));
 });

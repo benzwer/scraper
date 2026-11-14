@@ -183,6 +183,10 @@ Fill in at least one channel. With none, notifications are only printed in the t
   set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` (your chat id is in
   `https://api.telegram.org/bot<token>/getUpdates`).
 
+Besides the listings, every warning and error in the log (`WARN` / `ERROR` lines: an invalid
+definition, a page without listings, a block, a failed run) is sent to the same channels as
+*Scraper warning* or *Scraper error*. Failures to send a notification are only logged.
+
 ## Site definitions: `user/sites/*.json`
 
 A site definition tells the scraper how to read one portal. Every `*.json` file in

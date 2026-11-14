@@ -9,6 +9,9 @@ let logDir = null;
 let retentionDays = null;
 let currentDay = null;
 let fileFailed = false;
+// Called with { level, scope, text } on every warning and error (the scraper sends them as
+// notifications; the tools set none).
+let alertHandler = null;
 
 const LOG_FILE_RE = /^(\d{4})-(\d\d)-(\d\d)\.log$/;
 const pad = number => String(number).padStart(2, '0');
@@ -59,12 +62,24 @@ function appendToFile(line, date) {
   }
 }
 
+function setAlertHandler(handler) {
+  alertHandler = handler;
+}
+
 function createLogger(scope) {
   const writer = (level, method) => (...args) => {
     const date = new Date();
-    const line = `${date.toLocaleTimeString('en-GB')} ${level} [${scope}] ${format(...args)}`;
+    const text = format(...args);
+    const line = `${date.toLocaleTimeString('en-GB')} ${level} [${scope}] ${text}`;
     console[method](line);
     appendToFile(line, date);
+    if (alertHandler && method !== 'log') {
+      try {
+        alertHandler({ level: method, scope, text });
+      } catch {
+        // A failing alert must not break the code that logged.
+      }
+    }
   };
 
   return {
@@ -74,4 +89,4 @@ function createLogger(scope) {
   };
 }
 
-module.exports = { createLogger, setLogDir, removeOldLogs };
+module.exports = { createLogger, setLogDir, setAlertHandler, removeOldLogs };

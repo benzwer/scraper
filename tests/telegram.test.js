@@ -59,3 +59,23 @@ test('Notifier sends HTML, a button for web links and no link preview', async t 
   assert.equal(requests[1].text, '<b>Blocked</b>\ncaptcha');
   assert.equal(requests[1].reply_markup, undefined);
 });
+
+test('Notifier.alert sends warnings and errors escaped, shortened and without logging them', async t => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push(JSON.parse(options.body));
+    return { ok: true };
+  });
+  const printed = [];
+  t.mock.method(console, 'log', line => printed.push(line));
+  const notifier = new Notifier({ TELEGRAM_BOT_TOKEN: 'token', TELEGRAM_CHAT_ID: '42' });
+
+  await notifier.alert({ level: 'warn', scope: 'Site <A>', text: 'no listings' });
+  await notifier.alert({ level: 'error', scope: 'main', text: 'x'.repeat(5000) });
+
+  assert.equal(requests[0].text, '<b>⚠️ Scraper warning</b>\n[Site &lt;A&gt;] no listings');
+  assert.equal(requests[0].reply_markup, undefined);
+  assert.match(requests[1].text, /^<b>❌ Scraper error<\/b>\n\[main\] x+…$/);
+  assert.ok(requests[1].text.length < 4096);
+  assert.deepEqual(printed, []);
+});

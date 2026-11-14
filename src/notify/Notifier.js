@@ -1,6 +1,8 @@
 const { createLogger } = require('../utils/logger');
 const { isWebUrl, plainMessage } = require('./telegramFormat');
 
+const MAX_ALERT = 3500;
+
 // Sends notifications through ntfy and/or Telegram (configured in .env).
 // With no channel configured it only prints to the console.
 class Notifier {
@@ -26,6 +28,15 @@ class Notifier {
       this.sendNtfy({ title, message, url }),
       this.sendTelegram({ title, message, url, html })
     ]);
+  }
+
+  // A warning or error of the scraper (level: 'warn' | 'error'). Not logged again: it is
+  // already in the log. Shortened to stay within Telegram's 4096 characters.
+  async alert({ level, scope, text }) {
+    const title = level === 'error' ? '❌ Scraper error' : '⚠️ Scraper warning';
+    const full = `[${scope}] ${text}`;
+    const message = full.length > MAX_ALERT ? `${full.slice(0, MAX_ALERT - 1)}…` : full;
+    await Promise.all([this.sendNtfy({ title, message }), this.sendTelegram({ title, message })]);
   }
 
   async sendNtfy({ title, message, url }) {
