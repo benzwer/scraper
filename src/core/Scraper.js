@@ -8,6 +8,7 @@ const { delay, sleep, rand, shuffle } = require('../utils/random');
 const { createLogger } = require('../utils/logger');
 const { passesFilters, formatListing } = require('../models/listing');
 const { listingMessage, digestMessage } = require('../notify/telegramFormat');
+const { removeStaleProfileLock } = require('./profileLock');
 
 chromium.use(StealthPlugin());
 
@@ -138,6 +139,8 @@ class Scraper {
   async openBrowser(site) {
     const { browser: options } = this.config;
     const profileDir = this.profileDirOf(site);
+    const staleOwner = await removeStaleProfileLock(profileDir);
+    if (staleOwner) this.log.info(`${site.name}: removed the browser profile lock left by ${staleOwner}.`);
     const context = await chromium.launchPersistentContext(profileDir, {
       headless: options.headless,
       viewport: null,
