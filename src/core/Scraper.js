@@ -22,6 +22,7 @@ class Scraper {
     this.sites = sites;
     this.store = store;
     this.notifier = notifier;
+    this.openSession = null; // the browser currently open, if any
     this.log = createLogger('Scraper');
   }
 
@@ -148,12 +149,20 @@ class Scraper {
       timezoneId: options.timezoneId,
       args: options.args
     });
-    return { context, siteName: site.name, profileDir, blocked: false };
+    this.openSession = { context, siteName: site.name, profileDir, blocked: false };
+    return this.openSession;
+  }
+
+  // On an interrupt: closes the browser still open, so Chromium exits cleanly and releases its
+  // profile lock instead of being killed when the process exits.
+  async closeOpenBrowser() {
+    if (this.openSession) await this.closeBrowser(this.openSession);
   }
 
   // After a block the profile is deleted (once the browser is closed, so no file is in use):
   // its cookies may mark us as a bot, and the next visit starts clean.
   async closeBrowser(session) {
+    if (this.openSession === session) this.openSession = null;
     await session.context.close().catch(() => {});
     this.log.info('Browser closed.');
     if (!session.blocked) return;

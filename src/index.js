@@ -92,7 +92,11 @@ async function main() {
   const scraper = new Scraper({ config, sites, store, notifier });
 
   process.on('SIGINT', async () => {
-    log.info('Interrupt requested: saving and exiting.');
+    log.info('Interrupt requested: closing the browser, saving and exiting.');
+    // Closing the browser makes the page operations in progress fail: those errors are expected
+    // and must not be notified.
+    setAlertHandler(null);
+    await scraper.closeOpenBrowser();
     await store.save().catch(() => {});
     process.exit(0);
   });
